@@ -7,17 +7,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       callback(text);
     });
   },
-  
+
   // API для перевода текста
   translateAPI: (text, from, to) => {
     return ipcRenderer.invoke('api-translate', { text, from, to });
   },
-  
+
   // Управление окном
   togglePin: () => ipcRenderer.send('toggle-pin'),
   hideWindow: () => ipcRenderer.send('hide-window'),
   dragWindow: (position) => ipcRenderer.send('window-drag', position),
-  
+
   // События окна
   onWindowBlur: (callback) => {
     ipcRenderer.on('window-blur', callback);
@@ -28,7 +28,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onWindowHidden: (callback) => {
     ipcRenderer.on('window-hidden', callback);
   },
-  
+
   // Фокус на поле ввода
   onFocusInput: (callback) => {
     ipcRenderer.on('focus-input', callback);
