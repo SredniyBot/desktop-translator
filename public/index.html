@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LinguaFlow</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="../styles/styles.css">
+</head>
+
+<body>
+  <div class="container">
+    <div class="top-bar">
+      <div class="drag-handle" style="flex: 1; height: 100%;"></div>
+      <div class="top-right-controls">
+        <button class="theme-toggle" id="themeToggle" title="Переключить тему">
+          <i class="fas fa-moon"></i>
+        </button>
+        <button class="pin-toggle" id="pinToggle" title="Закрепить окно">
+          <i class="fas fa-thumbtack icon-default"></i>
+          <i class="fas fa-times icon-active"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="select-container">
+        <i class="fas fa-globe-americas"></i>
+        <select id="sourceLang">
+          <option value="auto">Определить язык</option>
+          <option value="en">Английский</option>
+          <option value="ru">Русский</option>
+          <option value="es">Испанский</option>
+          <option value="fr">Французский</option>
+          <option value="de">Немецкий</option>
+          <option value="zh">Китайский</option>
+          <option value="ja">Японский</option>
+        </select>
+      </div>
+
+      <button class="swap-btn" id="swapLangs" title="Поменять языки">
+        <i class="fas fa-exchange-alt"></i>
+      </button>
+
+      <div class="select-container">
+        <i class="fas fa-flag"></i>
+        <select id="targetLang">
+          <option value="en">Английский</option>
+          <option value="ru" selected>Русский</option>
+          <option value="es">Испанский</option>
+          <option value="fr">Французский</option>
+          <option value="de">Немецкий</option>
+          <option value="zh">Китайский</option>
+          <option value="ja">Японский</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="content-wrapper">
+      <div class="text-areas horizontal-layout">
+        <div class="text-area-container animate-fade">
+          <label for="original">Исходный текст</label>
+          <textarea id="original" placeholder="Текст для перевода..."></textarea>
+        </div>
+
+        <div class="text-area-container animate-fade" style="animation-delay: 0.1s;">
+          <label for="translated">Перевод</label>
+          <textarea id="translated"  placeholder="Результат перевода..." readonly></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <button class="action-btn" id="replaceBtn" title="Поменять местами текст и перевод">
+        <i class="fas fa-sync-alt"></i>
+        <span class="btn-text">Заменить</span>
+        <div class="toast">Заменено ✅</div>
+      </button>
+
+      <button class="action-btn" id="copyBtn" title="Скопировать перевод">
+        <i class="far fa-copy"></i>
+        <span class="btn-text">Копировать</span>
+        <div class="toast">Скопировано ✅</div>
+      </button>
+    </div>
+  </div>
+
+  <script src="../src/renderer.js"></script>
+</body>
+
+</html>
