@@ -8,12 +8,16 @@ class WindowManager {
         this.logger = new Logger('WindowManager');
         this.mainWindow = null;
         this.isPinned = false;
+        this.isActivating = false;
+        this.ignoreBlurUntil = 0;
+        this.isHotkeyCall = false; // Флаг для отслеживания вызова из горячих клавиш
     }
 
     async initialize() {
         try {
             this.createMainWindow();
             this.setupIpcHandlers();
+            this.setupWindowEvents();
             this.logger.info('Window manager initialized');
         } catch (error) {
             this.logger.error('Failed to initialize window manager:', error);
@@ -22,10 +26,7 @@ class WindowManager {
     }
 
     createMainWindow() {
-        // Получаем размеры экрана
         const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
-
-        // Рассчитываем позицию по центру экрана
         const x = Math.floor((screenWidth - 500) / 2);
         const y = Math.floor((screenHeight - 700) / 2);
 
@@ -43,7 +44,6 @@ class WindowManager {
             alwaysOnTop: false,
             backgroundColor: '#ffffff',
             webPreferences: {
-                // Критически важно: исправленный путь к preload.js
                 preload: path.join(__dirname, '..', 'preload.js'),
                 contextIsolation: true,
                 nodeIntegration: false,
@@ -53,7 +53,6 @@ class WindowManager {
             }
         });
 
-        // Критически важно: исправленный путь к index.html
         const indexPath = path.join(__dirname, '..', '..', 'public', 'index.html');
         this.logger.info('Loading HTML from:', indexPath);
 
@@ -61,30 +60,63 @@ class WindowManager {
             this.mainWindow.loadFile(indexPath);
         } catch (error) {
             this.logger.error('Failed to load index.html:', error);
-            // Альтернативный путь для отладки
             const altPath = path.join(process.cwd(), 'public', 'index.html');
             this.logger.info('Trying alternative path:', altPath);
             this.mainWindow.loadFile(altPath);
         }
-
-        // Открываем DevTools для отладки (можно убрать в production)
-        // this.mainWindow.webContents.openDevTools();
-
-        this.setupWindowEvents();
     }
 
     setupWindowEvents() {
         if (!this.mainWindow) return;
 
+        // Обработчик потери фокуса
         this.mainWindow.on('blur', () => {
-            if (!this.isPinned && this.mainWindow.isVisible()) {
-                this.hideWindow();
-            }
+            this.logger.debug('Window blur event', {
+                pinned: this.isPinned,
+                ignoreUntil: this.ignoreBlurUntil,
+                now: Date.now(),
+                isHotkeyCall: this.isHotkeyCall
+            });
+
+            // Отправляем событие в рендерер
             this.mainWindow?.webContents.send('window-blur');
+
+            // Если это вызов из горячих клавиш - игнорируем первый blur
+            if (this.isHotkeyCall) {
+                this.logger.debug('Ignoring blur from hotkey call');
+                this.isHotkeyCall = false;
+                return;
+            }
+
+            // Если окно закреплено - не скрываем
+            if (this.isPinned) {
+                this.logger.debug('Window pinned, not hiding');
+                return;
+            }
+
+            // Если недавно активировали окно - игнорируем blur
+            if (Date.now() < this.ignoreBlurUntil) {
+                this.logger.debug('Window recently activated, ignoring blur');
+                return;
+            }
+
+            // Задержка перед скрытием (для стабильности)
+            setTimeout(() => {
+                if (this.mainWindow &&
+                    this.mainWindow.isVisible() &&
+                    !this.mainWindow.isFocused() &&
+                    !this.isPinned) {
+                    this.logger.debug('Hiding window after blur');
+                    this.hideWindow();
+                }
+            }, 100);
         });
 
         this.mainWindow.on('focus', () => {
+            this.logger.debug('Window focus event');
             this.mainWindow?.webContents.send('window-focus');
+            this.isActivating = false;
+            this.isHotkeyCall = false; // Сбрасываем флаг горячих клавиш
         });
 
         this.mainWindow.on('close', (event) => {
@@ -95,7 +127,12 @@ class WindowManager {
         });
 
         this.mainWindow.on('hide', () => {
+            this.logger.debug('Window hidden');
             this.mainWindow?.webContents.send('window-hidden');
+        });
+
+        this.mainWindow.on('show', () => {
+            this.logger.debug('Window shown');
         });
     }
 
@@ -106,8 +143,7 @@ class WindowManager {
     }
 
     /**
-     * Простой и надежный метод показа окна
-     * Ключевое исправление: сначала показываем, потом фокусируем
+     * Показ окна
      */
     showWindow(textToInsert = '', fromHotkey = false) {
         if (!this.mainWindow) {
@@ -115,82 +151,151 @@ class WindowManager {
             return;
         }
 
+        // Устанавливаем флаг для горячих клавиш
+        this.isHotkeyCall = fromHotkey;
+
+        this.logger.debug('Showing window', {
+            pinned: this.isPinned,
+            visible: this.mainWindow.isVisible(),
+            fromHotkey: fromHotkey,
+            textLength: textToInsert?.length || 0
+        });
+
+        // Если окно уже видимо и закреплено
+        if (this.mainWindow.isVisible() && this.isPinned) {
+            this.logger.debug('Window already visible and pinned');
+
+            // Фокусируем окно
+            this.focusWindow(fromHotkey);
+
+            // Отправляем текст если есть, иначе фокус на поле ввода
+            setTimeout(() => {
+                if (textToInsert && textToInsert.trim()) {
+                    this.logger.debug('Sending text to already pinned window');
+                    this.mainWindow?.webContents.send('translate-text', textToInsert.trim());
+                } else {
+                    this.logger.debug('Focusing input in already pinned window');
+                    this.mainWindow?.webContents.send('focus-input');
+                }
+            }, 50);
+            return;
+        }
+
+        // Если окно уже видимо но не закреплено
+        if (this.mainWindow.isVisible() && !this.isPinned) {
+            this.logger.debug('Window visible but not pinned');
+
+            this.isActivating = true;
+            this.ignoreBlurUntil = Date.now() + 300;
+
+            this.focusWindow(fromHotkey);
+
+            setTimeout(() => {
+                if (textToInsert && textToInsert.trim()) {
+                    this.mainWindow?.webContents.send('translate-text', textToInsert.trim());
+                } else {
+                    this.mainWindow?.webContents.send('focus-input');
+                }
+            }, 50);
+            return;
+        }
+
+        // Если окно скрыто
+        this.logger.debug('Window hidden, showing it');
+
+        // Сбрасываем alwaysOnTop при открытии (если не закреплено)
+        if (!this.isPinned) {
+            this.mainWindow.setAlwaysOnTop(false);
+        }
+
         // Восстанавливаем если свернуто
         if (this.mainWindow.isMinimized()) {
             this.mainWindow.restore();
         }
 
-        // Показываем окно
+        this.isActivating = true;
+        this.ignoreBlurUntil = Date.now() + 500;
+
         this.mainWindow.show();
+        this.focusWindow(fromHotkey);
 
-        // Ключевое исправление для фокуса:
-        // Сначала показываем, потом активируем окно несколькими способами
-        this.activateWindow(fromHotkey);
+        // Отправляем состояние пина
+        setTimeout(() => {
+            this.mainWindow?.webContents.send('pin-state-changed', this.isPinned);
+        }, 10);
 
-        // Отправляем текст в рендерер
+        // Отправляем текст или фокус
         setTimeout(() => {
             if (textToInsert && textToInsert.trim()) {
-                this.logger.info('Sending text to renderer:', textToInsert.substring(0, 50));
+                this.logger.debug('Sending text to newly shown window');
                 this.mainWindow?.webContents.send('translate-text', textToInsert.trim());
             } else {
+                this.logger.debug('Focusing input in newly shown window');
                 this.mainWindow?.webContents.send('focus-input');
             }
         }, 100);
     }
 
     /**
-     * Активация окна - ключевой метод для решения проблемы фокуса
+     * Фокусировка окна
      */
-    activateWindow(fromHotkey = false) {
+    focusWindow(fromHotkey = false) {
         if (!this.mainWindow) return;
 
         try {
-            // 1. Базовый focus()
+            // Фокусируем окно
             this.mainWindow.focus();
 
-            // 2. Если открыто через горячие клавиши - принудительно активируем
+            // Особые действия для горячих клавиш
             if (fromHotkey) {
-                // Поднимаем окно поверх всех
+                // Устанавливаем окно поверх всех для гарантированного фокуса
                 this.mainWindow.setAlwaysOnTop(true);
                 this.mainWindow.moveTop();
 
-                // На Windows нужны дополнительные меры
+                // Платформозависимые хаки для лучшего фокуса
                 if (Platform.isWindows()) {
-                    // Минимизация и восстановление часто помогает с фокусом
                     setTimeout(() => {
-                        this.mainWindow.minimize();
-                        this.mainWindow.restore();
-                        this.mainWindow.focus();
+                        if (this.mainWindow) {
+                            // Дополнительная гарантия фокуса на Windows
+                            this.mainWindow.minimize();
+                            this.mainWindow.restore();
+                            this.mainWindow.focus();
+                        }
                     }, 10);
-                }
-
-                // На macOS используем активацию приложения
-                if (Platform.isMac()) {
+                } else if (Platform.isMac()) {
                     const { app } = require('electron');
                     app.focus({ steal: true });
                 }
 
-                // Через 500мс возвращаем нормальный режим alwaysOnTop
+                // Возвращаем нормальный режим alwaysOnTop через короткое время
                 setTimeout(() => {
-                    this.mainWindow.setAlwaysOnTop(this.isPinned);
-                }, 500);
+                    if (this.mainWindow) {
+                        this.mainWindow.setAlwaysOnTop(this.isPinned);
+                    }
+                }, 300);
             }
 
-            // 3. Дополнительная гарантия фокуса через короткое время
-            setTimeout(() => {
-                if (this.mainWindow && !this.mainWindow.isFocused()) {
-                    this.mainWindow.focus();
-                }
-            }, 50);
-
-            this.logger.debug('Window activated');
+            this.logger.debug('Window focused', { fromHotkey: fromHotkey });
         } catch (error) {
-            this.logger.error('Failed to activate window:', error);
+            this.logger.error('Failed to focus window:', error);
         }
     }
 
+    /**
+     * Скрытие окна
+     */
     hideWindow() {
         if (this.mainWindow && this.mainWindow.isVisible()) {
+            this.logger.debug('Hiding window');
+
+            // Сбрасываем alwaysOnTop при скрытии (если закреплено)
+            if (this.isPinned) {
+                this.isPinned = false;
+                this.mainWindow.setAlwaysOnTop(false);
+                // Отправляем обновленное состояние в рендерер
+                this.mainWindow?.webContents.send('pin-state-changed', false);
+            }
+
             this.mainWindow.hide();
         }
     }
@@ -202,20 +307,27 @@ class WindowManager {
         this.mainWindow.setPosition(x + delta.x, y + delta.y);
     }
 
+    /**
+     * Переключение режима закрепления
+     */
     togglePin() {
         this.isPinned = !this.isPinned;
 
         if (!this.mainWindow) return;
 
+        // Применяем изменения к окну
         this.mainWindow.setAlwaysOnTop(this.isPinned);
 
-        if (this.isPinned) {
+        // Если закрепляем - гарантируем, что окно видимо
+        if (this.isPinned && !this.mainWindow.isVisible()) {
             this.mainWindow.show();
-            this.activateWindow();
+            this.focusWindow();
         }
 
-        this.logger.info(`Pin toggled: ${this.isPinned}`);
+        // Отправляем новое состояние в рендерер
         this.mainWindow?.webContents.send('pin-state-changed', this.isPinned);
+
+        this.logger.info(`Pin toggled: ${this.isPinned}`);
 
         return this.isPinned;
     }

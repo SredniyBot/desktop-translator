@@ -37,5 +37,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('pin-state-changed', (event, isPinned) => {
       callback(isPinned);
     });
-  }
+  },
+
+  // Хранилище для темы
+  saveTheme: (theme) => ipcRenderer.invoke('save-theme', theme),
+  loadTheme: () => ipcRenderer.invoke('load-theme')
 });

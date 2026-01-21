@@ -137,12 +137,16 @@ class HotkeyManager {
             const clipboardText = clipboard.readText();
             this.logger.info('✓ Ctrl+C+C detected! Opening translator...');
 
-            // Открываем окно поверх всех с фокусом
             if (this.windowManager) {
-                await this.windowManager.showWindow(clipboardText, true);
+                this.windowManager.showWindow(clipboardText, true);
             }
         } catch (error) {
             this.logger.error('Failed to handle double Ctrl+C:', error);
+
+            // Все равно открываем окно
+            if (this.windowManager) {
+                this.windowManager.showWindow('', true);
+            }
         }
     }
 
@@ -161,14 +165,13 @@ class HotkeyManager {
             const selectedText = await this.textSelectionService.getSelectedText();
             this.logger.debug('Selected text:', selectedText?.substring(0, 50));
 
-            // Открываем окно поверх всех с фокусом
-            await this.windowManager.showWindow(selectedText, true);
+            this.windowManager.showWindow(selectedText, true);
         } catch (error) {
             this.logger.error('Failed to handle Ctrl+Alt+Q:', error);
 
-            // Все равно открываем окно, даже если не удалось получить текст
+            // Все равно открываем окно
             if (this.windowManager) {
-                await this.windowManager.showWindow(null, true);
+                this.windowManager.showWindow('', true);
             }
         }
     }
