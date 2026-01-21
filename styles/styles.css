@@ -60,7 +60,7 @@ body {
   display: flex;
   flex-direction: column;
   padding: 10px;
-  transition: var(--theme-transition);
+  /*transition: var(--theme-transition);*/
 }
 
 .top-bar {

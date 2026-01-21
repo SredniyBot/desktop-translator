@@ -1,11 +1,14 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Простой и надежный API для рендерера
 contextBridge.exposeInMainWorld('electronAPI', {
   // Получение текста для перевода
   onTranslateText: (callback) => {
-    ipcRenderer.on('translate-text', (event, text) => {
-      callback(text);
-    });
+    ipcRenderer.on('translate-text', (event, text) => callback(text));
+  },
+
+  onFocusInput: (callback) => {
+    ipcRenderer.on('focus-input', callback);
   },
 
   // API для перевода текста
@@ -29,8 +32,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('window-hidden', callback);
   },
 
-  // Фокус на поле ввода
-  onFocusInput: (callback) => {
-    ipcRenderer.on('focus-input', callback);
+  // Состояние пина
+  onPinStateChanged: (callback) => {
+    ipcRenderer.on('pin-state-changed', (event, isPinned) => {
+      callback(isPinned);
+    });
   }
 });

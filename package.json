@@ -2,23 +2,34 @@
   "name": "my-translator",
   "productName": "my-translator",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "Professional desktop translator application",
   "main": "src/index.js",
   "scripts": {
     "start": "electron-forge start",
+    "dev": "NODE_ENV=development electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "echo \"No linting configured\""
+    "lint": "eslint src/**/*.js",
+    "test": "jest",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
   },
-  "keywords": [],
+  "keywords": [
+    "translator",
+    "electron",
+    "desktop",
+    "productivity"
+  ],
   "author": {
     "name": "bytevalue",
     "email": "43825919+SredniyBot@users.noreply.github.com"
   },
   "license": "MIT",
   "dependencies": {
-    "clipboardy": "^4.0.0",
+    "axios": "^1.10.0",
     "electron-squirrel-startup": "^1.0.1",
     "koffi": "^2.12.1",
     "robotjs": "^0.6.0",
@@ -33,9 +44,67 @@
     "@electron-forge/plugin-auto-unpack-natives": "^7.8.1",
     "@electron-forge/plugin-fuses": "^7.8.1",
     "@electron/fuses": "^1.8.0",
-    "axios": "^1.10.0",
     "electron": "37.2.1",
     "electron-builder": "^26.0.12",
-    "electron-rebuild": "^3.2.9"
+    "electron-rebuild": "^3.2.9",
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0"
+  },
+  "config": {
+    "forge": {
+      "packagerConfig": {
+        "asar": true,
+        "icon": "public/translate-icon2"
+      },
+      "makers": [
+        {
+          "name": "@electron-forge/maker-squirrel",
+          "config": {
+            "name": "my_translator"
+          }
+        },
+        {
+          "name": "@electron-forge/maker-zip",
+          "platforms": [
+            "darwin"
+          ]
+        },
+        {
+          "name": "@electron-forge/maker-deb",
+          "config": {}
+        },
+        {
+          "name": "@electron-forge/maker-rpm",
+          "config": {}
+        }
+      ]
+    }
+  },
+  "build": {
+    "appId": "com.yourcompany.translator",
+    "productName": "My Translator",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "public/**/*",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      "public/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/translate-icon2.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "public/translate-icon2.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "public/translate-icon2.png"
+    }
   }
 }
