@@ -7,16 +7,18 @@ const Logger = require('../utils/Logger');
  * Отвечает за регистрацию и обработку системных горячих клавиш
  */
 class HotkeyManager {
-    constructor({ windowManager, textSelectionService } = {}) {
+    constructor({ windowManager, textSelectionService, settingsManager } = {}) {
         this.logger = new Logger('HotkeyManager');
         this.windowManager = windowManager;
         this.textSelectionService = textSelectionService;
+        this.settingsManager = settingsManager;
 
         this.ctrlCPressCount = 0;
         this.ctrlCResetTimer = null;
         this.DOUBLE_TAP_TIMEOUT_MS = 500;
 
         this.isInitialized = false;
+        this.activeHotkeys = new Map();
     }
 
     /**
@@ -28,12 +30,51 @@ class HotkeyManager {
         }
 
         try {
+            // Загружаем горячие клавиши из настроек
+            await this.loadHotkeysFromSettings();
+
+            // Регистрируем глобальные горячие клавиши
             this.registerGlobalHotkeys();
+
+            // Слушаем изменения настроек
+            if (this.settingsManager) {
+                this.settingsManager.addChangeListener(this.onSettingsChanged.bind(this));
+            }
+
             this.isInitialized = true;
             this.logger.info('Hotkey manager initialized');
         } catch (error) {
             this.logger.error('Failed to initialize hotkey manager:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Загружает горячие клавиши из настроек
+     */
+    async loadHotkeysFromSettings() {
+        if (!this.settingsManager) return;
+
+        try {
+            const hotkeys = this.settingsManager.getSetting('app.hotkeys', []);
+            this.activeHotkeys.clear();
+
+            hotkeys.forEach(hotkey => {
+                this.activeHotkeys.set(hotkey.id, hotkey);
+            });
+
+            this.logger.info(`Loaded ${hotkeys.length} hotkeys from settings`);
+        } catch (error) {
+            this.logger.error('Failed to load hotkeys from settings:', error);
+        }
+    }
+
+    /**
+     * Обрабатывает изменения настроек
+     */
+    onSettingsChanged(settings) {
+        if (settings && settings.app && settings.app.hotkeys) {
+            this.loadHotkeysFromSettings();
         }
     }
 
@@ -65,13 +106,20 @@ class HotkeyManager {
      * Обрабатывает нажатие клавиш
      */
     handleKeyDown(event) {
-        // Ctrl+C (двойное нажатие)
+        // Проверяем зарегистрированные горячие клавиши
+        for (const [id, hotkey] of this.activeHotkeys) {
+            if (this.checkHotkeyMatch(event, hotkey.key)) {
+                this.handleRegisteredHotkey(id, hotkey);
+                return;
+            }
+        }
+
+        // Стандартные горячие клавиши (для обратной совместимости)
         if (this.isCtrlC(event)) {
             this.handleCtrlC();
             return;
         }
 
-        // Ctrl+Alt+Q (альтернативная горячая клавиша)
         if (this.isCtrlAltQ(event)) {
             this.handleCtrlAltQ();
             return;
@@ -79,6 +127,34 @@ class HotkeyManager {
 
         // Сброс счетчика Ctrl+C при нажатии других клавиш
         this.resetCtrlCCounterIfNeeded(event);
+    }
+
+    /**
+     * Проверяет соответствие события горячей клавише
+     */
+    checkHotkeyMatch(event, hotkeyString) {
+        // Пока заглушка - в реальности нужно парсить строку горячих клавиш
+        // и сравнивать с событием
+        return false;
+    }
+
+    /**
+     * Обрабатывает зарегистрированную горячую клавишу
+     */
+    handleRegisteredHotkey(id, hotkey) {
+        this.logger.info(`Hotkey triggered: ${hotkey.name} (${hotkey.key})`);
+
+        // Здесь будет логика для разных горячих клавиш
+        switch (id) {
+            case 'translate_selected':
+                this.handleCtrlAltQ();
+                break;
+            case 'open_translator':
+                this.handleDoubleCtrlC();
+                break;
+            default:
+                this.logger.warn(`No handler for hotkey: ${id}`);
+        }
     }
 
     /**
@@ -189,12 +265,24 @@ class HotkeyManager {
     }
 
     /**
+     * Возвращает список активных горячих клавиш
+     */
+    getActiveHotkeys() {
+        return Array.from(this.activeHotkeys.values());
+    }
+
+    /**
      * Очищает ресурсы менеджера
      */
     cleanup() {
         try {
             if (this.ctrlCResetTimer) {
                 clearTimeout(this.ctrlCResetTimer);
+            }
+
+            if (this.settingsManager) {
+                // Удаляем слушателя изменений настроек
+                // (нужно сохранить ссылку на метод для удаления)
             }
 
             uIOhook.stop();

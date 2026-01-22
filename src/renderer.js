@@ -1,8 +1,3 @@
-/**
- * Translator Renderer
- * Полная версия с функциональностью всех кнопок и интерфейса
- */
-
 class TranslatorRenderer {
   constructor() {
     this.elements = {};
@@ -11,27 +6,22 @@ class TranslatorRenderer {
       isTranslating: false,
       isDragging: false,
       lastDragPos: { x: 0, y: 0 },
-      currentTheme: 'light'
+      currentTheme: 'light',
+      themeColor: 'indigo'
     };
 
     this.init();
   }
 
-  /**
-   * Инициализация приложения
-   */
   async init() {
     document.addEventListener('DOMContentLoaded', async () => {
       await this.initializeApplication();
     });
   }
 
-  /**
-   * Основная инициализация приложения
-   */
   async initializeApplication() {
     this.cacheElements();
-    await this.loadSavedTheme();
+    await this.loadSettings();
     this.setupEventListeners();
     this.setupElectronIPC();
     this.updateLayout();
@@ -40,9 +30,6 @@ class TranslatorRenderer {
     console.log('Translator UI initialized');
   }
 
-  /**
-   * Кэширует DOM элементы
-   */
   cacheElements() {
     this.elements = {
       original: document.getElementById('original'),
@@ -52,139 +39,116 @@ class TranslatorRenderer {
       pinToggle: document.getElementById('pinToggle'),
       swapBtn: document.getElementById('swapLangs'),
       container: document.querySelector('.container'),
-      themeToggle: document.getElementById('themeToggle'),
+      settingsToggle: document.getElementById('settingsToggle'),
       copyBtn: document.getElementById('copyBtn'),
       replaceBtn: document.getElementById('replaceBtn'),
       dragHandle: document.querySelector('.drag-handle')
     };
-
-    console.log('Cached elements:', Object.keys(this.elements));
   }
 
-  /**
-   * Загружает сохраненную тему
-   */
-  async loadSavedTheme() {
+  async loadSettings() {
     try {
       if (window.electronAPI) {
-        const savedTheme = await window.electronAPI.loadTheme();
-        if (savedTheme === 'dark') {
-          this.applyDarkTheme();
-        } else {
-          this.applyLightTheme();
+        const settings = await window.electronAPI.getAllSettings();
+        if (settings) {
+          this.applyTheme(settings.customization?.theme);
+          this.applyThemeColor(settings.customization?.themeColor);
+
+          this.state.currentTheme = settings.customization?.theme || 'light';
+          this.state.themeColor = settings.customization?.themeColor || 'indigo';
         }
       }
     } catch (error) {
-      console.warn('Could not load saved theme:', error);
+      console.warn('Could not load settings:', error);
       this.applyLightTheme();
     }
   }
 
-  /**
-   * Применяет темную тему
-   */
-  applyDarkTheme() {
-    document.body.classList.add('dark-theme');
-    this.state.currentTheme = 'dark';
-    this.updateThemeToggleIcon('dark');
-  }
-
-  /**
-   * Применяет светлую тему
-   */
-  applyLightTheme() {
-    document.body.classList.remove('dark-theme');
-    this.state.currentTheme = 'light';
-    this.updateThemeToggleIcon('light');
-  }
-
-  /**
-   * Обновляет иконку переключения темы
-   */
-  updateThemeToggleIcon(theme) {
-    if (!this.elements.themeToggle) return;
-
-    const icon = this.elements.themeToggle.querySelector('i');
-    if (!icon) return;
-
-    if (theme === 'dark') {
-      icon.classList.remove('fa-moon');
-      icon.classList.add('fa-sun');
-    } else {
-      icon.classList.remove('fa-sun');
-      icon.classList.add('fa-moon');
-    }
-  }
-
-  /**
-   * Настраивает обработчики событий DOM
-   */
   setupEventListeners() {
-    this.setupThemeToggle();
-    this.setupTextAreaEvents();
+    this.setTextAreaEvents();
     this.setupButtonEvents();
     this.setupDragEvents();
     this.setupWindowEvents();
     this.setupLanguageEvents();
   }
 
-  /**
-   * Настраивает обработчики IPC событий от Electron
-   */
   setupElectronIPC() {
     if (!window.electronAPI) {
       console.error('Electron API not available');
       return;
     }
 
-    // Получение текста для перевода
     window.electronAPI.onTranslateText(async (text) => {
       await this.handleIncomingText(text);
     });
 
-    // Фокус на поле ввода
     window.electronAPI.onFocusInput(() => {
       this.focusOriginalTextarea(true);
     });
 
-    // События окна
     window.electronAPI.onWindowBlur(() => {
-      console.log('Window blurred in renderer');
       this.elements.container?.classList.add('no-border');
     });
 
     window.electronAPI.onWindowFocus(() => {
-      console.log('Window focused in renderer');
       this.elements.container?.classList.remove('no-border');
     });
 
     window.electronAPI.onWindowHidden(() => {
-      console.log('Window hidden in renderer');
-      // Сбрасываем состояние пина только если окно было скрыто
-      // (не должно сбрасываться при простой потере фокуса)
       this.updatePinState(false);
     });
 
-    // Изменение состояния пина
     window.electronAPI.onPinStateChanged((isPinned) => {
       this.updatePinState(isPinned);
     });
 
-    console.log('Electron IPC handlers set up');
+    // Слушаем события изменения темы
+    window.electronAPI.onThemeChanged((theme) => {
+      this.applyTheme(theme);
+      this.state.currentTheme = theme;
+    });
+
+    // Слушаем события изменения цвета темы
+    window.electronAPI.onThemeColorChanged((color) => {
+      this.applyThemeColor(color);
+      this.state.themeColor = color;
+    });
   }
 
-  /**
-   * Обновляет состояние пина
-   */
+  applyTheme(theme) {
+    if (theme === 'dark') {
+      document.body.classList.add('dark-theme');
+    } else {
+      document.body.classList.remove('dark-theme');
+    }
+
+    console.log(`Theme applied: ${theme}`);
+  }
+
+  applyThemeColor(color) {
+    const colorMap = {
+      indigo: { primary: '#6366f1', dark: '#4f46e5' },
+      blue: { primary: '#3b82f6', dark: '#2563eb' },
+      emerald: { primary: '#10b981', dark: '#059669' },
+      purple: { primary: '#8b5cf6', dark: '#7c3aed' },
+      rose: { primary: '#f43f5e', dark: '#e11d48' },
+      amber: { primary: '#f59e0b', dark: '#d97706' },
+      slate: { primary: '#64748b', dark: '#475569' }
+    };
+
+    const colors = colorMap[color] || colorMap.indigo;
+
+    document.documentElement.style.setProperty('--primary', colors.primary);
+    document.documentElement.style.setProperty('--primary-dark', colors.dark);
+
+    console.log(`Theme color applied: ${color}`);
+  }
+
   updatePinState(isPinned) {
     this.state.isPinned = isPinned;
     this.updatePinButton(isPinned);
-    console.log('Pin state updated in renderer:', isPinned);
   }
 
-  /**
-   * Обновляет кнопку пина
-   */
   updatePinButton(isPinned) {
     if (!this.elements.pinToggle) return;
 
@@ -204,12 +168,7 @@ class TranslatorRenderer {
     }
   }
 
-  /**
-   * Обрабатывает входящий текст для перевода
-   */
   async handleIncomingText(text) {
-    console.log('Handling incoming text:', text?.substring(0, 50));
-
     if (!text || !text.trim()) {
       this.focusOriginalTextarea(true);
       return;
@@ -225,9 +184,6 @@ class TranslatorRenderer {
     await this.translateText();
   }
 
-  /**
-   * Фокусирует поле ввода текста
-   */
   focusOriginalTextarea(selectAll = false) {
     if (!this.elements.original) return;
 
@@ -242,35 +198,7 @@ class TranslatorRenderer {
     }
   }
 
-  /**
-   * Настраивает переключение темы
-   */
-  setupThemeToggle() {
-    if (!this.elements.themeToggle) return;
-
-    this.elements.themeToggle.addEventListener('click', async () => {
-      if (this.state.currentTheme === 'light') {
-        this.applyDarkTheme();
-      } else {
-        this.applyLightTheme();
-      }
-
-      try {
-        if (window.electronAPI) {
-          await window.electronAPI.saveTheme(this.state.currentTheme);
-        }
-      } catch (error) {
-        console.error('Failed to save theme:', error);
-      }
-
-      console.log('Theme toggled to:', this.state.currentTheme);
-    });
-  }
-
-  /**
-   * Настраивает события textarea
-   */
-  setupTextAreaEvents() {
+  setTextAreaEvents() {
     if (!this.elements.original) return;
 
     this.elements.original.addEventListener('keydown', (event) => {
@@ -283,17 +211,21 @@ class TranslatorRenderer {
     let debounceTimer;
     this.elements.original.addEventListener('input', () => {
       clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        if (this.elements.original.value.trim()) {
-          this.translateText();
-        }
-      }, 500);
+
+      if (this.shouldUseLiveTranslation()) {
+        debounceTimer = setTimeout(() => {
+          if (this.elements.original.value.trim()) {
+            this.translateText();
+          }
+        }, 500);
+      }
     });
   }
 
-  /**
-   * Настраивает события кнопок
-   */
+  shouldUseLiveTranslation() {
+    return true;
+  }
+
   setupButtonEvents() {
     if (this.elements.replaceBtn) {
       this.elements.replaceBtn.addEventListener('click', () => this.swapText());
@@ -312,9 +244,6 @@ class TranslatorRenderer {
     }
   }
 
-  /**
-   * Настраивает события для выбора языков
-   */
   setupLanguageEvents() {
     if (!this.elements.sourceLang || !this.elements.targetLang) return;
 
@@ -331,15 +260,9 @@ class TranslatorRenderer {
     });
   }
 
-  /**
-   * Добавляет кнопку перевода
-   */
   addTranslateButton() {
     const footer = document.querySelector('.footer');
-    if (!footer) {
-      console.warn('Footer element not found');
-      return;
-    }
+    if (!footer) return;
 
     const existingBtn = document.getElementById('translateBtn');
     if (existingBtn) return;
@@ -351,12 +274,8 @@ class TranslatorRenderer {
     translateBtn.addEventListener('click', () => this.translateText());
 
     footer.insertBefore(translateBtn, footer.firstChild);
-    console.log('Translate button added');
   }
 
-  /**
-   * Настраивает перетаскивание окна
-   */
   setupDragEvents() {
     let dragHandle = this.elements.dragHandle;
     if (!dragHandle) {
@@ -389,9 +308,6 @@ class TranslatorRenderer {
     });
   }
 
-  /**
-   * Начинает перетаскивание окна
-   */
   startDragging(event) {
     this.state.isDragging = true;
     this.state.lastDragPos = { x: event.screenX, y: event.screenY };
@@ -399,9 +315,6 @@ class TranslatorRenderer {
     document.body.style.userSelect = 'none';
   }
 
-  /**
-   * Обрабатывает перетаскивание окна
-   */
   handleDragging(event) {
     const dx = event.screenX - this.state.lastDragPos.x;
     const dy = event.screenY - this.state.lastDragPos.y;
@@ -412,26 +325,17 @@ class TranslatorRenderer {
     }
   }
 
-  /**
-   * Завершает перетаскивание окна
-   */
   stopDragging() {
     this.state.isDragging = false;
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
   }
 
-  /**
-   * Настраивает обработчики событий окна
-   */
   setupWindowEvents() {
     window.addEventListener('load', () => this.updateLayout());
     window.addEventListener('resize', () => this.updateLayout());
   }
 
-  /**
-   * Обновляет layout в зависимости от размера окна
-   */
   updateLayout() {
     const textAreas = document.querySelector('.text-areas');
     const containerElement = this.elements.container;
@@ -443,14 +347,8 @@ class TranslatorRenderer {
     textAreas.classList.toggle('vertical-layout', !isHorizontal);
   }
 
-  /**
-   * Выполняет перевод текста
-   */
   async translateText() {
-    if (this.state.isTranslating) {
-      console.log('Translation already in progress');
-      return;
-    }
+    if (this.state.isTranslating) return;
 
     const text = this.elements.original.value.trim();
     if (!text) {
@@ -468,8 +366,6 @@ class TranslatorRenderer {
     if (this.elements.translated) {
       this.elements.translated.value = 'Перевод...';
     }
-
-    console.log('Translating text:', { textLength: text.length, from, to });
 
     try {
       if (!window.electronAPI) {
@@ -495,9 +391,6 @@ class TranslatorRenderer {
     }
   }
 
-  /**
-   * Копирует переведенный текст в буфер обмена
-   */
   async copyTranslatedText() {
     if (!this.elements.translated) return;
 
@@ -512,16 +405,12 @@ class TranslatorRenderer {
     try {
       await navigator.clipboard.writeText(text);
       this.showToast(this.elements.copyBtn, 'Скопировано!');
-      console.log('Text copied to clipboard');
     } catch (error) {
       console.error('Failed to copy text:', error);
       this.showToast(this.elements.copyBtn, 'Ошибка копирования!');
     }
   }
 
-  /**
-   * Меняет местами оригинальный и переведенный текст
-   */
   swapText() {
     if (!this.elements.original || !this.elements.translated) return;
 
@@ -541,9 +430,6 @@ class TranslatorRenderer {
     this.showToast(this.elements.replaceBtn, 'Текст заменен!');
   }
 
-  /**
-   * Меняет языки местами
-   */
   swapLanguages() {
     if (!this.elements.swapBtn || !this.elements.sourceLang || !this.elements.targetLang) return;
 
@@ -564,21 +450,14 @@ class TranslatorRenderer {
     }, 400);
   }
 
-  /**
-   * Переключает режим закрепления окна
-   */
   togglePin() {
     if (this.state.isPinned) {
-      // Если окно закреплено, нажатие на крестик открепляет и скрывает окно
       console.log('Unpinning and hiding window');
       if (window.electronAPI) {
-        // Сначала обновляем состояние в рендерере
         this.updatePinState(false);
-        // Затем скрываем окно
         window.electronAPI.hideWindow();
       }
     } else {
-      // Если окно не закреплено, закрепляем его
       console.log('Pinning window');
       if (window.electronAPI) {
         window.electronAPI.togglePin();
@@ -586,9 +465,6 @@ class TranslatorRenderer {
     }
   }
 
-  /**
-   * Показывает временное уведомление
-   */
   showToast(element, message) {
     if (!element) return;
 

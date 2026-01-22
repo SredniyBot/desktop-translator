@@ -1,16 +1,11 @@
-const { app, ipcMain } = require('electron');
+const { app, ipcMain, BrowserWindow } = require('electron');
 const AppManager = require('./core/AppManager');
 const Logger = require('./utils/Logger');
-const fs = require('fs').promises;
-const path = require('path');
 
 const logger = new Logger('Main');
 let appManager = null;
 
-// Путь к файлу сохранения темы
-const THEME_FILE = path.join(app.getPath('userData'), 'theme.json');
-
-// Регистрация IPC обработчиков для API перевода
+// Регистрация IPC обработчиков
 ipcMain.handle('api-translate', async (event, { text, from, to }) => {
   if (appManager && appManager.translationService) {
     return await appManager.translationService.translate(text, from, to);
@@ -18,36 +13,67 @@ ipcMain.handle('api-translate', async (event, { text, from, to }) => {
   return { error: 'Translation service not available' };
 });
 
-// Сохранение темы
-ipcMain.handle('save-theme', async (event, theme) => {
-  try {
-    const themeData = JSON.stringify({ theme });
-    await fs.writeFile(THEME_FILE, themeData, 'utf8');
-    logger.info(`Theme saved: ${theme}`);
-    return { success: true };
-  } catch (error) {
-    logger.error('Failed to save theme:', error);
-    return { error: error.message };
+// Настройки
+ipcMain.handle('get-settings-structure', async () => {
+  if (appManager && appManager.settingsManager) {
+    return appManager.settingsManager.getSettingsStructure();
   }
+  return [];
 });
 
-// Загрузка темы
-ipcMain.handle('load-theme', async () => {
-  try {
-    const data = await fs.readFile(THEME_FILE, 'utf8');
-    const themeData = JSON.parse(data);
-    logger.info(`Theme loaded: ${themeData.theme}`);
-    return themeData.theme || 'light';
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      logger.info('No saved theme found, using default');
-      return 'light';
+ipcMain.handle('get-all-settings', async () => {
+  if (appManager && appManager.settingsStore) {
+    return appManager.settingsStore.getAll();
+  }
+  return null;
+});
+
+ipcMain.handle('get-setting', async (event, path) => {
+  if (appManager && appManager.settingsStore) {
+    return appManager.settingsStore.get(path);
+  }
+  return null;
+});
+
+ipcMain.handle('update-setting', async (event, { path, value }) => {
+  if (appManager && appManager.settingsStore) {
+    const success = await appManager.settingsStore.set(path, value, false);
+
+    // Отправляем события изменения темы и цвета
+    if (path === 'customization.theme') {
+      const mainWindow = BrowserWindow.getAllWindows()[0];
+      if (mainWindow) {
+        mainWindow.webContents.send('theme-changed', value);
+      }
     }
-    logger.error('Failed to load theme:', error);
-    return 'light';
+
+    if (path === 'customization.themeColor') {
+      const mainWindow = BrowserWindow.getAllWindows()[0];
+      if (mainWindow) {
+        mainWindow.webContents.send('theme-color-changed', value);
+      }
+    }
+
+    return success;
   }
+  return false;
 });
 
+ipcMain.handle('reset-settings', async () => {
+  if (appManager && appManager.settingsStore) {
+    return await appManager.settingsStore.reset();
+  }
+  return false;
+});
+
+ipcMain.handle('test-provider-connection', async (event, { provider, apiKey }) => {
+  if (appManager && appManager.settingsManager) {
+    return await appManager.settingsManager.testProviderConnection(provider, apiKey);
+  }
+  return { success: false, error: 'Settings manager not available' };
+});
+
+// Инициализация приложения
 app.whenReady().then(() => {
   try {
     appManager = new AppManager();

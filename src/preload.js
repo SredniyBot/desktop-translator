@@ -1,17 +1,16 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Простой и надежный API для рендерера
+// Современный API для рендерера с поддержкой настроек
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Получение текста для перевода
+  // Основные функции
   onTranslateText: (callback) => {
     ipcRenderer.on('translate-text', (event, text) => callback(text));
   },
-
   onFocusInput: (callback) => {
     ipcRenderer.on('focus-input', callback);
   },
 
-  // API для перевода текста
+  // Перевод
   translateAPI: (text, from, to) => {
     return ipcRenderer.invoke('api-translate', { text, from, to });
   },
@@ -32,14 +31,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('window-hidden', callback);
   },
 
-  // Состояние пина
+  // Пин
   onPinStateChanged: (callback) => {
     ipcRenderer.on('pin-state-changed', (event, isPinned) => {
       callback(isPinned);
     });
   },
 
-  // Хранилище для темы
-  saveTheme: (theme) => ipcRenderer.invoke('save-theme', theme),
-  loadTheme: () => ipcRenderer.invoke('load-theme')
+  // Настройки - новая архитектура
+  getSettingsStructure: () => ipcRenderer.invoke('get-settings-structure'),
+  getAllSettings: () => ipcRenderer.invoke('get-all-settings'),
+  getSetting: (path) => ipcRenderer.invoke('get-setting', path),
+  updateSetting: (path, value) => ipcRenderer.invoke('update-setting', { path, value }),
+  resetSettings: () => ipcRenderer.invoke('reset-settings'),
+  testProviderConnection: (provider, apiKey) =>
+      ipcRenderer.invoke('test-provider-connection', { provider, apiKey }),
+
+  // Тема (для обратной совместимости)
+  onThemeChanged: (callback) => {
+    ipcRenderer.on('theme-changed', (event, theme) => callback(theme));
+  },
+  onThemeColorChanged: (callback) => {
+    ipcRenderer.on('theme-color-changed', (event, color) => callback(color));
+  }
 });

@@ -3,9 +3,10 @@ const path = require('path');
 const Logger = require('../utils/Logger');
 
 class TrayManager {
-    constructor({ windowManager } = {}) {
+    constructor({ windowManager, settingsManager } = {}) {
         this.logger = new Logger('TrayManager');
         this.windowManager = windowManager;
+        this.settingsManager = settingsManager;
         this.tray = null;
     }
 
@@ -74,6 +75,16 @@ class TrayManager {
                 click: () => {
                     if (this.windowManager) {
                         this.windowManager.showWindow();
+                    }
+                }
+            },
+            {
+                label: 'Настройки',
+                click: () => {
+                    if (this.windowManager) {
+                        // Открываем окно и показываем настройки
+                        this.windowManager.showWindow();
+                        // Здесь нужно будет отправить сообщение для открытия настроек
                     }
                 }
             },

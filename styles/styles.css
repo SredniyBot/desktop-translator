@@ -515,3 +515,50 @@ textarea::-webkit-scrollbar-thumb:hover {
 .dark-theme textarea::-webkit-scrollbar-thumb:hover {
   background: var(--secondary);
 }
+
+/* Дополнительные стили для совместимости с настройками */
+
+.main-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transition: opacity 0.3s ease;
+}
+
+.main-content.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Кнопка настроек (дополнение к существующим стилям кнопок) */
+.settings-toggle {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  user-select: none;
+  flex-shrink: 0;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--primary);
+  border: none;
+  -webkit-app-region: no-drag;
+}
+
+.settings-toggle:hover {
+  background: rgba(99, 102, 241, 0.2);
+  transform: rotate(30deg);
+}
+
+.settings-toggle.active {
+  background: var(--primary);
+  color: white;
+}
+
+.settings-toggle.active:hover {
+  transform: rotate(-30deg);
+}

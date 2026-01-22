@@ -1,29 +1,31 @@
 <!DOCTYPE html>
 <html lang="ru">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LinguaFlow</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="../styles/styles.css">
+  <link rel="stylesheet" href="../styles/settings.css">
 </head>
 
 <body>
-  <div class="container">
-    <div class="top-bar">
-      <div class="drag-handle" style="flex: 1; height: 100%;"></div>
-      <div class="top-right-controls">
-        <button class="theme-toggle" id="themeToggle" title="Переключить тему">
-          <i class="fas fa-moon"></i>
-        </button>
-        <button class="pin-toggle" id="pinToggle" title="Закрепить окно">
-          <i class="fas fa-thumbtack icon-default"></i>
-          <i class="fas fa-times icon-active"></i>
-        </button>
-      </div>
+<div class="container">
+  <div class="top-bar">
+    <div class="drag-handle" style="flex: 1; height: 100%;"></div>
+    <div class="top-right-controls">
+      <button class="settings-toggle" id="settingsToggle" title="Настройки">
+        <i class="fas fa-cog"></i>
+      </button>
+      <button class="pin-toggle" id="pinToggle" title="Закрепить окно">
+        <i class="fas fa-thumbtack icon-default"></i>
+        <i class="fas fa-times icon-active"></i>
+      </button>
     </div>
+  </div>
 
+  <!-- Основной контент -->
+  <div class="main-content">
     <div class="controls">
       <div class="select-container">
         <i class="fas fa-globe-americas"></i>
@@ -66,7 +68,7 @@
 
         <div class="text-area-container animate-fade" style="animation-delay: 0.1s;">
           <label for="translated">Перевод</label>
-          <textarea id="translated"  placeholder="Результат перевода..." readonly></textarea>
+          <textarea id="translated" placeholder="Результат перевода..." readonly></textarea>
         </div>
       </div>
     </div>
@@ -86,7 +88,22 @@
     </div>
   </div>
 
-  <script src="../src/renderer.js"></script>
-</body>
+  <!-- Панель настроек -->
+  <div class="settings-panel" id="settingsPanel">
+    <div class="settings-header">
+      <h2><i class="fas fa-cog"></i> Настройки</h2>
+      <button class="close-settings" id="closeSettings" title="Закрыть настройки">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
 
+    <div class="settings-content" id="settingsContent">
+      <!-- Настройки будут загружены динамически -->
+    </div>
+  </div>
+</div>
+
+<script src="../src/renderer.js"></script>
+<script src="../src/settings/SettingsRenderer.js"></script>
+</body>
 </html>
