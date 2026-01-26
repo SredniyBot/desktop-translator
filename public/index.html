@@ -105,5 +105,12 @@
 
 <script src="../src/renderer.js"></script>
 <script src="../src/settings/SettingsRenderer.js"></script>
+
+<script>
+  // Делаем TranslatorRenderer глобально доступным для SettingsRenderer
+  document.addEventListener('DOMContentLoaded', () => {
+    window.translatorRenderer = new TranslatorRenderer();
+  });
+</script>
 </body>
 </html>

@@ -7,7 +7,8 @@ class TranslatorRenderer {
       isDragging: false,
       lastDragPos: { x: 0, y: 0 },
       currentTheme: 'light',
-      themeColor: 'indigo'
+      themeColor: 'indigo',
+      settingsOpen: false // Добавляем состояние вкладки настроек
     };
 
     this.init();
@@ -42,7 +43,8 @@ class TranslatorRenderer {
       settingsToggle: document.getElementById('settingsToggle'),
       copyBtn: document.getElementById('copyBtn'),
       replaceBtn: document.getElementById('replaceBtn'),
-      dragHandle: document.querySelector('.drag-handle')
+      dragHandle: document.querySelector('.drag-handle'),
+      settingsPanel: document.getElementById('settingsPanel') // Добавляем панель настроек
     };
   }
 
@@ -88,14 +90,25 @@ class TranslatorRenderer {
 
     window.electronAPI.onWindowBlur(() => {
       this.elements.container?.classList.add('no-border');
+      // При потере фокуса закрываем настройки
+      this.closeSettingsIfOpen();
     });
 
     window.electronAPI.onWindowFocus(() => {
       this.elements.container?.classList.remove('no-border');
+      // При получении фокуса гарантируем, что настройки закрыты
+      this.ensureSettingsClosed();
     });
 
     window.electronAPI.onWindowHidden(() => {
       this.updatePinState(false);
+      // При скрытии окна закрываем настройки
+      this.closeSettingsIfOpen();
+    });
+
+    window.electronAPI.onWindowShown(() => {
+      // При показе окна гарантируем, что настройки закрыты
+      this.ensureSettingsClosed();
     });
 
     window.electronAPI.onPinStateChanged((isPinned) => {
@@ -113,6 +126,43 @@ class TranslatorRenderer {
       this.applyThemeColor(color);
       this.state.themeColor = color;
     });
+  }
+
+  /**
+   * Закрывает панель настроек, если она открыта
+   */
+  closeSettingsIfOpen() {
+    if (this.state.settingsOpen && this.elements.settingsPanel) {
+      this.elements.settingsPanel.classList.remove('visible');
+      this.elements.settingsToggle?.classList.remove('active');
+      this.state.settingsOpen = false;
+
+      // Уведомляем SettingsRenderer о закрытии
+      if (window.settingsRenderer) {
+        window.settingsRenderer.hideSettings();
+      }
+    }
+  }
+
+  /**
+   * Гарантирует, что панель настроек закрыта
+   */
+  ensureSettingsClosed() {
+    if (this.elements.settingsPanel?.classList.contains('visible')) {
+      this.closeSettingsIfOpen();
+    }
+  }
+
+  /**
+   * Обновляет состояние панели настроек
+   */
+  updateSettingsState(isOpen) {
+    this.state.settingsOpen = isOpen;
+
+    // Отправляем состояние в SettingsRenderer
+    if (window.settingsRenderer) {
+      window.settingsRenderer.isSettingsOpen = isOpen;
+    }
   }
 
   applyTheme(theme) {
@@ -241,6 +291,40 @@ class TranslatorRenderer {
 
     if (this.elements.pinToggle) {
       this.elements.pinToggle.addEventListener('click', () => this.togglePin());
+    }
+
+    // Обработчик для кнопки настроек
+    if (this.elements.settingsToggle) {
+      this.elements.settingsToggle.addEventListener('click', () => {
+        this.toggleSettings();
+      });
+    }
+  }
+
+  /**
+   * Переключает состояние панели настроек
+   */
+  toggleSettings() {
+    if (this.state.settingsOpen) {
+      this.closeSettingsIfOpen();
+    } else {
+      this.openSettings();
+    }
+  }
+
+  /**
+   * Открывает панель настроек
+   */
+  openSettings() {
+    if (!this.elements.settingsPanel) return;
+
+    this.elements.settingsPanel.classList.add('visible');
+    this.elements.settingsToggle?.classList.add('active');
+    this.state.settingsOpen = true;
+
+    // Уведомляем SettingsRenderer об открытии
+    if (window.settingsRenderer) {
+      window.settingsRenderer.isSettingsOpen = true;
     }
   }
 

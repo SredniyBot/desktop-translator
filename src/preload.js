@@ -30,6 +30,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onWindowHidden: (callback) => {
     ipcRenderer.on('window-hidden', callback);
   },
+  onWindowShown: (callback) => {
+    ipcRenderer.on('window-shown', callback);
+  },
 
   // Пин
   onPinStateChanged: (callback) => {

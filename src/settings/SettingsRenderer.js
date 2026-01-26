@@ -69,6 +69,26 @@ class SettingsRenderer {
                 this.hideSettings();
             }
         });
+
+        // Подписываемся на события окна для закрытия настроек
+        if (window.electronAPI) {
+            window.electronAPI.onWindowBlur(() => {
+                if (this.isSettingsOpen) {
+                    this.hideSettings();
+                }
+            });
+
+            window.electronAPI.onWindowHidden(() => {
+                if (this.isSettingsOpen) {
+                    this.hideSettings();
+                }
+            });
+
+            window.electronAPI.onWindowShown(() => {
+                // Гарантируем, что при показе окна настройки закрыты
+                this.hideSettings();
+            });
+        }
     }
 
     async loadSettings() {
@@ -157,9 +177,17 @@ class SettingsRenderer {
         const div = document.createElement('div');
         div.className = 'setting-item';
         div.dataset.settingId = setting.id;
+        div.dataset.type = setting.type; // Добавляем тип для стилизации
         div.style.setProperty('--item-index', setting.itemIndex || 0);
 
+        // Для toggle создаем особую структуру
+        if (setting.type === 'toggle') {
+            return this.createToggleSettingElement(setting);
+        }
+
+        // Стандартная структура для других типов
         const labelContainer = document.createElement('div');
+        labelContainer.className = 'setting-label-container';
 
         const label = document.createElement('label');
         label.textContent = setting.label;
@@ -186,6 +214,72 @@ class SettingsRenderer {
         return div;
     }
 
+    /**
+     * Создает элемент настройки типа toggle с особой структурой
+     */
+    createToggleSettingElement(setting) {
+        const div = document.createElement('div');
+        div.className = 'setting-item setting-item-toggle';
+        div.dataset.settingId = setting.id;
+        div.dataset.type = setting.type;
+        div.style.setProperty('--item-index', setting.itemIndex || 0);
+
+        // Контейнер для label и описания
+        const textContainer = document.createElement('div');
+        textContainer.className = 'toggle-text-container';
+
+        const label = document.createElement('label');
+        label.textContent = setting.label;
+        label.htmlFor = `setting-${setting.id}`;
+        textContainer.appendChild(label);
+
+        if (setting.description) {
+            const description = document.createElement('div');
+            description.className = 'setting-description';
+            description.textContent = setting.description;
+            textContainer.appendChild(description);
+        }
+
+        div.appendChild(textContainer);
+
+        // Контейнер для toggle переключателя
+        const toggleContainer = document.createElement('div');
+        toggleContainer.className = 'toggle-container';
+
+        const toggle = document.createElement('label');
+        toggle.className = 'toggle-switch';
+        toggle.innerHTML = `
+            <input type="checkbox" id="setting-${setting.id}" data-setting="${setting.id}">
+            <span class="toggle-slider"></span>
+        `;
+
+        const currentValue = this.getSettingValue(setting.id);
+        const isChecked = setting.valueOn ?
+            currentValue === setting.valueOn :
+            Boolean(currentValue);
+
+        const input = toggle.querySelector('input');
+        input.checked = isChecked;
+
+        input.addEventListener('change', async (e) => {
+            const value = setting.valueOn ?
+                (e.target.checked ? setting.valueOn : setting.valueOff) :
+                e.target.checked;
+
+            await this.updateSetting(setting.id, value);
+
+            // Специальная обработка для темы
+            if (setting.id === 'customization.theme') {
+                this.applyTheme(value);
+            }
+        });
+
+        toggleContainer.appendChild(toggle);
+        div.appendChild(toggleContainer);
+
+        return div;
+    }
+
     createControlElement(setting) {
         const handlers = {
             toggle: () => this.createToggleControl(setting),
@@ -203,7 +297,7 @@ class SettingsRenderer {
 
     createToggleControl(setting) {
         const container = document.createElement('div');
-        container.className = 'toggle-container';
+        container.className = 'toggle-control-container';
 
         const toggle = document.createElement('label');
         toggle.className = 'toggle-switch';
@@ -783,6 +877,11 @@ class SettingsRenderer {
         this.elements.settingsPanel.classList.remove('visible');
         this.elements.settingsToggle.classList.remove('active');
         this.isSettingsOpen = false;
+
+        // Уведомляем главный рендерер о закрытии настроек
+        if (window.translatorRenderer) {
+            window.translatorRenderer.updateSettingsState(false);
+        }
     }
 
     async resetSettings() {
@@ -875,6 +974,9 @@ class SettingsRenderer {
 
 // Создаем и экспортируем экземпляр
 const settingsRenderer = new SettingsRenderer();
+
+// Делаем глобально доступным для связи с TranslatorRenderer
+window.settingsRenderer = settingsRenderer;
 
 // Инициализируем при загрузке DOM
 document.addEventListener('DOMContentLoaded', () => {

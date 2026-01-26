@@ -119,6 +119,11 @@ class WindowManager {
             this.isHotkeyCall = false; // Сбрасываем флаг горячих клавиш
         });
 
+        this.mainWindow.on('show', () => {
+            this.logger.debug('Window shown');
+            this.mainWindow?.webContents.send('window-shown'); // Отправляем событие показа окна
+        });
+
         this.mainWindow.on('close', (event) => {
             if (!this.isPinned) {
                 event.preventDefault();
@@ -129,10 +134,6 @@ class WindowManager {
         this.mainWindow.on('hide', () => {
             this.logger.debug('Window hidden');
             this.mainWindow?.webContents.send('window-hidden');
-        });
-
-        this.mainWindow.on('show', () => {
-            this.logger.debug('Window shown');
         });
     }
 
