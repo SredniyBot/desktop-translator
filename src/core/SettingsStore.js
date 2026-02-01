@@ -1,3 +1,4 @@
+// File: src/core/SettingsStore.js
 const { EventEmitter } = require('events');
 const fs = require('fs').promises;
 const path = require('path');
@@ -40,7 +41,7 @@ class SettingsStore extends EventEmitter {
      */
     getDefaultSettings() {
         return {
-            version: '2.0.0',
+            version: '2.2.0',
             provider: {
                 name: 'mock',
                 apiKey: '',
@@ -71,6 +72,13 @@ class SettingsStore extends EventEmitter {
                 accentColor: '#6366f1'
             },
             translation: {
+                // Новые настройки Context Aware
+                smartSwitch: true,
+                primaryLanguage: 'ru',
+                secondLanguage: 'en',
+                sessionTimeout: 60,
+
+                // Старые настройки (fallback)
                 autoDetectLanguage: true,
                 rememberLanguagePairs: true,
                 defaultSourceLang: 'auto',
@@ -88,12 +96,11 @@ class SettingsStore extends EventEmitter {
             const data = await fs.readFile(this.settingsPath, 'utf8');
             const loadedSettings = JSON.parse(data);
 
-            // Миграция с версии 1.0.0
-            const migratedSettings = this.migrateFromV1(loadedSettings);
+            // Миграция (если нужна)
+            const migratedSettings = this.migrateSettings(loadedSettings);
 
-            // Объединяем с настройками по умолчанию для новых полей
+            // Объединяем с настройками по умолчанию
             this.settings = this.deepMerge(this.getDefaultSettings(), migratedSettings);
-
             this.logger.info('Settings loaded from file');
             this.emit('loaded', this.settings);
         } catch (error) {
@@ -124,7 +131,7 @@ class SettingsStore extends EventEmitter {
     }
 
     /**
-     * Получает значение настройки
+     * Получает значение настройки по пути (например, 'provider.name')
      */
     get(path, defaultValue = null) {
         const parts = path.split('.');
@@ -158,19 +165,15 @@ class SettingsStore extends EventEmitter {
         const lastKey = parts[parts.length - 1];
         const oldValue = current[lastKey];
 
-        // Если значение не изменилось, ничего не делаем
         if (JSON.stringify(oldValue) === JSON.stringify(value)) {
             return;
         }
 
-        // Устанавливаем новое значение
         current[lastKey] = value;
 
-        // Отправляем событие об изменении
         this.emit('changed', { path, value, oldValue });
         this.emit(`changed:${path}`, value, oldValue);
 
-        // Сохраняем с дебаунсом
         if (immediate) {
             await this.saveSettings();
         } else {
@@ -178,45 +181,16 @@ class SettingsStore extends EventEmitter {
         }
     }
 
-    /**
-     * Обновляет несколько настроек одновременно
-     */
-    async update(updates, immediate = false) {
-        for (const [path, value] of Object.entries(updates)) {
-            await this.set(path, value, true);
-        }
-
-        if (!immediate) {
-            this.debouncedSave();
-        }
-    }
-
-    /**
-     * Получает конфигурацию для конкретного провайдера
-     */
     getProviderConfig(providerName) {
         const config = this.get(`provider.config.${providerName}`, {});
         return { ...config };
     }
 
-    /**
-     * Устанавливает конфигурацию для провайдера
-     */
-    async setProviderConfig(providerName, config) {
-        return await this.set(`provider.config.${providerName}`, config);
-    }
-
-    /**
-     * Получает текущую конфигурацию провайдера
-     */
     getCurrentProviderConfig() {
         const providerName = this.get('provider.name', 'mock');
         return this.getProviderConfig(providerName);
     }
 
-    /**
-     * Дебаунс сохранения настроек
-     */
     debouncedSave() {
         if (this.debounceTimers.has('save')) {
             clearTimeout(this.debounceTimers.get('save'));
@@ -226,13 +200,9 @@ class SettingsStore extends EventEmitter {
             await this.saveSettings();
             this.debounceTimers.delete('save');
         }, 500);
-
         this.debounceTimers.set('save', timer);
     }
 
-    /**
-     * Сбрасывает настройки к значениям по умолчанию
-     */
     async reset() {
         this.settings = this.getDefaultSettings();
         await this.saveSettings();
@@ -240,16 +210,10 @@ class SettingsStore extends EventEmitter {
         return true;
     }
 
-    /**
-     * Возвращает все настройки
-     */
     getAll() {
         return { ...this.settings };
     }
 
-    /**
-     * Глубокое слияние объектов
-     */
     deepMerge(target, source) {
         for (const key in source) {
             if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
@@ -264,56 +228,10 @@ class SettingsStore extends EventEmitter {
         return target;
     }
 
-    /**
-     * Миграция настроек с версии 1.0.0
-     */
-    migrateFromV1(oldSettings) {
-        // Если это уже новая версия, возвращаем как есть
-        if (oldSettings.version === '2.0.0') {
-            return oldSettings;
-        }
-
-        this.logger.info('Migrating settings from v1 to v2');
-
-        const newSettings = { ...oldSettings };
-
-        // Миграция структуры провайдера
-        if (oldSettings.provider) {
-            newSettings.provider = {
-                name: oldSettings.provider.name || 'mock',
-                apiKey: oldSettings.provider.apiKey || '',
-                config: {
-                    mock: {},
-                    yandex: {
-                        folderId: oldSettings.provider.folderId || ''
-                    },
-                    google: {
-                        projectId: oldSettings.provider.projectId || '',
-                        location: oldSettings.provider.location || 'global'
-                    }
-                }
-            };
-
-            // Удаляем старые поля
-            delete newSettings.provider.apiUrl;
-            delete newSettings.provider.folderId;
-            delete newSettings.provider.projectId;
-            delete newSettings.provider.location;
-        }
-
-        // Добавляем новые секции
-        if (!newSettings.translation) {
-            newSettings.translation = this.getDefaultSettings().translation;
-        }
-
-        newSettings.version = '2.0.0';
-
-        return newSettings;
+    migrateSettings(oldSettings) {
+        return oldSettings;
     }
 
-    /**
-     * Очищает ресурсы
-     */
     cleanup() {
         for (const timer of this.debounceTimers.values()) {
             clearTimeout(timer);

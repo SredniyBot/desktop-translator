@@ -8,7 +8,7 @@ class SettingsManager {
         this.store = settingsStore;
         this.isInitialized = false;
         this.appliedSettings = new Set();
-        this.translationManager = null; // Будет установлен извне
+        this.translationManager = null;
     }
 
     async initialize() {
@@ -38,6 +38,10 @@ class SettingsManager {
         // Применяем настройки провайдера перевода
         if (this.translationManager) {
             await this.applyTranslationProvider(settings.provider);
+            // Инициализируем контекст (если настройки изменились пока приложение было выключено)
+            if (this.translationManager.initializeContext) {
+                this.translationManager.initializeContext();
+            }
         }
 
         this.logger.info('All settings applied');
@@ -46,11 +50,16 @@ class SettingsManager {
     async applySettingChange({ path, value }) {
         this.logger.debug(`Applying setting change: ${path} =`, value);
 
-        // Обработка изменений конфигурации провайдера
+        // Обновляем провайдер
         if (path.startsWith('provider.config.')) {
             await this.applyTranslationProvider(this.store.getAll().provider);
             this.appliedSettings.add(path);
             return;
+        }
+
+        // Обновляем настройки Smart Switch (контекст)
+        if (path.startsWith('translation.') && this.translationManager) {
+            this.translationManager.initializeContext();
         }
 
         switch (path) {
@@ -158,39 +167,34 @@ class SettingsManager {
 
     setTranslationManager(translationManager) {
         this.translationManager = translationManager;
+        // Передаем ссылку на store в менеджер перевода, чтобы он мог читать настройки
+        if (this.translationManager.setSettingsStore) {
+            this.translationManager.setSettingsStore(this.store);
+        }
     }
 
-    /**
-     * Генерирует структуру настроек динамически на основе доступных провайдеров
-     */
     getSettingsStructure() {
-        // Получаем список провайдеров из менеджера
         const providers = this.translationManager ?
             this.translationManager.getAvailableProviders() :
             [];
 
-        // Формируем опции для селекта
         const providerOptions = providers.map(p => ({
             value: p.name,
             label: p.label,
             icon: p.icon
         }));
 
-        // Генерируем специфичные поля настроек для каждого провайдера
         const providerConfigSettings = [];
-
         providers.forEach(provider => {
             if (provider.configFields) {
                 provider.configFields.forEach(field => {
                     providerConfigSettings.push({
-                        // Путь в хранилище: provider.config.yandex.folderId
                         id: `provider.config.${provider.name}.${field.id}`,
                         type: field.type,
                         label: `${field.label}`,
                         description: field.description,
                         placeholder: field.placeholder,
                         defaultValue: field.defaultValue,
-                        // Условия отображения
                         dependsOn: 'provider.name',
                         showFor: [provider.name],
                         required: field.required
@@ -198,6 +202,19 @@ class SettingsManager {
                 });
             }
         });
+
+        const languageOptions = [
+            { value: 'en', label: 'Английский' },
+            { value: 'ru', label: 'Русский' },
+            { value: 'es', label: 'Испанский' },
+            { value: 'fr', label: 'Французский' },
+            { value: 'de', label: 'Немецкий' },
+            { value: 'zh', label: 'Китайский' },
+            { value: 'ja', label: 'Японский' },
+            { value: 'ko', label: 'Корейский' },
+            { value: 'it', label: 'Итальянский' },
+            { value: 'tr', label: 'Турецкий' }
+        ];
 
         return [
             {
@@ -217,13 +234,12 @@ class SettingsManager {
                         id: 'provider.apiKey',
                         type: 'apiKey',
                         label: 'Ключ API',
-                        description: 'Введите ваш API ключ для доступа к сервису',
+                        description: 'Введите ваш API ключ',
                         placeholder: 'Введите ваш API ключ',
                         required: true,
                         dependsOn: 'provider.name',
-                        hideFor: ['mock'] // Скрываем для mock
+                        hideFor: ['mock']
                     },
-                    // Вставляем динамические поля провайдеров
                     ...providerConfigSettings
                 ]
             },
@@ -231,52 +247,40 @@ class SettingsManager {
                 id: 'translation',
                 title: 'Настройки перевода',
                 icon: 'fas fa-language',
-                description: 'Параметры перевода текста',
+                description: 'Параметры перевода и автоматизация',
                 settings: [
                     {
-                        id: 'translation.autoDetectLanguage',
+                        id: 'translation.smartSwitch',
                         type: 'toggle',
-                        label: 'Автоопределение языка',
-                        description: 'Автоматически определять язык исходного текста'
+                        label: 'Умное переключение (Context Aware)',
+                        description: 'Автоматически менять направление и запоминать языки сессии'
                     },
                     {
-                        id: 'translation.rememberLanguagePairs',
-                        type: 'toggle',
-                        label: 'Запоминать пары языков',
-                        description: 'Запоминать выбранные языки для следующего перевода'
-                    },
-                    {
-                        id: 'translation.defaultSourceLang',
+                        id: 'translation.primaryLanguage',
                         type: 'select',
-                        label: 'Язык по умолчанию (откуда)',
-                        description: 'Язык по умолчанию для исходного текста',
-                        options: [
-                            { value: 'auto', label: 'Автоопределение' },
-                            { value: 'en', label: 'Английский' },
-                            { value: 'ru', label: 'Русский' },
-                            { value: 'es', label: 'Испанский' },
-                            { value: 'fr', label: 'Французский' },
-                            { value: 'de', label: 'Немецкий' },
-                            { value: 'zh', label: 'Китайский' },
-                            { value: 'ja', label: 'Японский' },
-                            { value: 'ko', label: 'Корейский' }
-                        ]
+                        label: 'Родной язык (Primary)',
+                        description: 'Ваш основной язык',
+                        options: languageOptions,
+                        dependsOn: 'translation.smartSwitch',
+                        showFor: [true]
+                    },
+                    {
+                        id: 'translation.secondLanguage',
+                        type: 'select',
+                        label: 'Иностранный по умолчанию',
+                        description: 'Язык для новой сессии',
+                        options: languageOptions,
+                        dependsOn: 'translation.smartSwitch',
+                        showFor: [true]
                     },
                     {
                         id: 'translation.defaultTargetLang',
                         type: 'select',
-                        label: 'Язык по умолчанию (куда)',
-                        description: 'Язык по умолчанию для перевода',
-                        options: [
-                            { value: 'en', label: 'Английский' },
-                            { value: 'ru', label: 'Русский' },
-                            { value: 'es', label: 'Испанский' },
-                            { value: 'fr', label: 'Французский' },
-                            { value: 'de', label: 'Немецкий' },
-                            { value: 'zh', label: 'Китайский' },
-                            { value: 'ja', label: 'Японский' },
-                            { value: 'ko', label: 'Корейский' }
-                        ]
+                        label: 'Целевой язык (по умолчанию)',
+                        description: 'Язык для перевода, если автоопределение не используется',
+                        options: languageOptions,
+                        dependsOn: 'translation.smartSwitch',
+                        showFor: [false]
                     }
                 ]
             },
