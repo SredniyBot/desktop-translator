@@ -7,8 +7,14 @@ let appManager = null;
 
 // Регистрация IPC обработчиков
 ipcMain.handle('api-translate', async (event, { text, from, to }) => {
-  if (appManager && appManager.translationService) {
-    return await appManager.translationService.translate(text, from, to);
+  if (appManager && appManager.translationManager) {
+    try {
+      const result = await appManager.translationManager.translate(text, from, to);
+      return result;
+    } catch (error) {
+      logger.error('Translation failed:', error);
+      return { error: error.message };
+    }
   }
   return { error: 'Translation service not available' };
 });
@@ -54,6 +60,15 @@ ipcMain.handle('update-setting', async (event, { path, value }) => {
       }
     }
 
+    // Отправляем событие смены провайдера
+    if (path.startsWith('provider.')) {
+      const mainWindow = BrowserWindow.getAllWindows()[0];
+      if (mainWindow) {
+        const providerSettings = appManager.settingsStore.getAll().provider;
+        mainWindow.webContents.send('provider-changed', providerSettings);
+      }
+    }
+
     return success;
   }
   return false;
@@ -66,11 +81,45 @@ ipcMain.handle('reset-settings', async () => {
   return false;
 });
 
-ipcMain.handle('test-provider-connection', async (event, { provider, apiKey }) => {
+ipcMain.handle('test-provider-connection', async (event, { provider, apiKey, config }) => {
   if (appManager && appManager.settingsManager) {
-    return await appManager.settingsManager.testProviderConnection(provider, apiKey);
+    return await appManager.settingsManager.testProviderConnection(provider, apiKey, config);
   }
   return { success: false, error: 'Settings manager not available' };
+});
+
+ipcMain.handle('get-supported-languages', async () => {
+  if (appManager && appManager.translationManager) {
+    try {
+      const languages = await appManager.translationManager.getSupportedLanguages();
+      return languages;
+    } catch (error) {
+      logger.error('Failed to get supported languages:', error);
+      return [];
+    }
+  }
+  return [];
+});
+
+ipcMain.handle('get-translation-history', async () => {
+  if (appManager && appManager.settingsManager) {
+    return await appManager.settingsManager.getTranslationHistory();
+  }
+  return [];
+});
+
+ipcMain.handle('clear-translation-history', async () => {
+  if (appManager && appManager.settingsManager) {
+    return await appManager.settingsManager.clearTranslationHistory();
+  }
+  return false;
+});
+
+ipcMain.handle('get-current-provider-info', async () => {
+  if (appManager && appManager.translationManager) {
+    return appManager.translationManager.getCurrentProviderInfo();
+  }
+  return { name: 'none', initialized: false };
 });
 
 // Инициализация приложения

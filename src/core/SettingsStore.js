@@ -40,15 +40,26 @@ class SettingsStore extends EventEmitter {
      */
     getDefaultSettings() {
         return {
-            version: '1.0.0',
+            version: '2.0.0',
             provider: {
-                name: 'google',
+                name: 'mock',
                 apiKey: '',
-                apiUrl: 'https://translation.googleapis.com/language/translate/v2'
+                config: {
+                    mock: {},
+                    yandex: {
+                        folderId: ''
+                    },
+                    google: {
+                        projectId: '',
+                        location: 'global'
+                    }
+                }
             },
             app: {
                 autoStart: true,
                 liveTranslation: true,
+                translationHistory: true,
+                cacheTranslations: true,
                 hotkeys: [
                     { id: 'translate_selected', name: 'Перевод выделенного текста', key: 'Ctrl+Alt+Q' },
                     { id: 'open_translator', name: 'Открыть переводчик', key: 'Ctrl+C+C' }
@@ -58,6 +69,13 @@ class SettingsStore extends EventEmitter {
                 theme: 'light',
                 themeColor: 'indigo',
                 accentColor: '#6366f1'
+            },
+            translation: {
+                autoDetectLanguage: true,
+                rememberLanguagePairs: true,
+                defaultSourceLang: 'auto',
+                defaultTargetLang: 'ru',
+                preferredLanguages: ['en', 'ru', 'es', 'fr', 'de']
             }
         };
     }
@@ -70,8 +88,11 @@ class SettingsStore extends EventEmitter {
             const data = await fs.readFile(this.settingsPath, 'utf8');
             const loadedSettings = JSON.parse(data);
 
+            // Миграция с версии 1.0.0
+            const migratedSettings = this.migrateFromV1(loadedSettings);
+
             // Объединяем с настройками по умолчанию для новых полей
-            this.settings = this.deepMerge(this.getDefaultSettings(), loadedSettings);
+            this.settings = this.deepMerge(this.getDefaultSettings(), migratedSettings);
 
             this.logger.info('Settings loaded from file');
             this.emit('loaded', this.settings);
@@ -171,6 +192,29 @@ class SettingsStore extends EventEmitter {
     }
 
     /**
+     * Получает конфигурацию для конкретного провайдера
+     */
+    getProviderConfig(providerName) {
+        const config = this.get(`provider.config.${providerName}`, {});
+        return { ...config };
+    }
+
+    /**
+     * Устанавливает конфигурацию для провайдера
+     */
+    async setProviderConfig(providerName, config) {
+        return await this.set(`provider.config.${providerName}`, config);
+    }
+
+    /**
+     * Получает текущую конфигурацию провайдера
+     */
+    getCurrentProviderConfig() {
+        const providerName = this.get('provider.name', 'mock');
+        return this.getProviderConfig(providerName);
+    }
+
+    /**
      * Дебаунс сохранения настроек
      */
     debouncedSave() {
@@ -218,6 +262,53 @@ class SettingsStore extends EventEmitter {
             }
         }
         return target;
+    }
+
+    /**
+     * Миграция настроек с версии 1.0.0
+     */
+    migrateFromV1(oldSettings) {
+        // Если это уже новая версия, возвращаем как есть
+        if (oldSettings.version === '2.0.0') {
+            return oldSettings;
+        }
+
+        this.logger.info('Migrating settings from v1 to v2');
+
+        const newSettings = { ...oldSettings };
+
+        // Миграция структуры провайдера
+        if (oldSettings.provider) {
+            newSettings.provider = {
+                name: oldSettings.provider.name || 'mock',
+                apiKey: oldSettings.provider.apiKey || '',
+                config: {
+                    mock: {},
+                    yandex: {
+                        folderId: oldSettings.provider.folderId || ''
+                    },
+                    google: {
+                        projectId: oldSettings.provider.projectId || '',
+                        location: oldSettings.provider.location || 'global'
+                    }
+                }
+            };
+
+            // Удаляем старые поля
+            delete newSettings.provider.apiUrl;
+            delete newSettings.provider.folderId;
+            delete newSettings.provider.projectId;
+            delete newSettings.provider.location;
+        }
+
+        // Добавляем новые секции
+        if (!newSettings.translation) {
+            newSettings.translation = this.getDefaultSettings().translation;
+        }
+
+        newSettings.version = '2.0.0';
+
+        return newSettings;
     }
 
     /**

@@ -1,3 +1,4 @@
+// File: src/core/SettingsManager.js
 const Logger = require('../utils/Logger');
 const Platform = require('../utils/Platform');
 
@@ -7,6 +8,7 @@ class SettingsManager {
         this.store = settingsStore;
         this.isInitialized = false;
         this.appliedSettings = new Set();
+        this.translationManager = null; // Будет установлен извне
     }
 
     async initialize() {
@@ -29,16 +31,27 @@ class SettingsManager {
 
     async applyAllSettings(settings) {
         this.logger.info('Applying all settings');
-
         await this.applyAutoStart(settings.app?.autoStart);
         await this.applyTheme(settings.customization?.theme);
         await this.applyThemeColor(settings.customization?.themeColor);
+
+        // Применяем настройки провайдера перевода
+        if (this.translationManager) {
+            await this.applyTranslationProvider(settings.provider);
+        }
 
         this.logger.info('All settings applied');
     }
 
     async applySettingChange({ path, value }) {
         this.logger.debug(`Applying setting change: ${path} =`, value);
+
+        // Обработка изменений конфигурации провайдера
+        if (path.startsWith('provider.config.')) {
+            await this.applyTranslationProvider(this.store.getAll().provider);
+            this.appliedSettings.add(path);
+            return;
+        }
 
         switch (path) {
             case 'app.autoStart':
@@ -57,6 +70,11 @@ class SettingsManager {
                 await this.applyHotkeys(value);
                 break;
 
+            case 'provider.name':
+            case 'provider.apiKey':
+                await this.applyTranslationProvider(this.store.getAll().provider);
+                break;
+
             default:
                 this.logger.debug(`No specific handler for setting: ${path}`);
         }
@@ -67,12 +85,10 @@ class SettingsManager {
     async applyAutoStart(enabled) {
         try {
             const { app } = require('electron');
-
             app.setLoginItemSettings({
                 openAtLogin: enabled,
                 openAsHidden: false
             });
-
             this.logger.info(`Auto-start ${enabled ? 'enabled' : 'disabled'}`);
         } catch (error) {
             this.logger.error('Failed to apply auto-start setting:', error);
@@ -111,7 +127,78 @@ class SettingsManager {
         }
     }
 
+    async applyTranslationProvider(providerSettings) {
+        if (!this.translationManager) {
+            this.logger.warn('Translation manager not available, skipping provider application');
+            return;
+        }
+
+        try {
+            const { name, apiKey } = providerSettings;
+            const config = this.store.getProviderConfig(name);
+
+            await this.translationManager.switchProvider(name, apiKey, config);
+            this.logger.info(`Translation provider switched to: ${name}`);
+
+            // Отправляем уведомление о смене провайдера
+            const mainWindow = require('electron').BrowserWindow.getAllWindows()[0];
+            if (mainWindow) {
+                mainWindow.webContents.send('provider-changed', { name, config });
+            }
+
+        } catch (error) {
+            this.logger.error('Failed to apply translation provider:', error);
+            // Fallback на mock провайдера
+            if (providerSettings.name !== 'mock') {
+                this.logger.warn('Falling back to mock provider');
+                await this.translationManager.switchProvider('mock', '', {});
+            }
+        }
+    }
+
+    setTranslationManager(translationManager) {
+        this.translationManager = translationManager;
+    }
+
+    /**
+     * Генерирует структуру настроек динамически на основе доступных провайдеров
+     */
     getSettingsStructure() {
+        // Получаем список провайдеров из менеджера
+        const providers = this.translationManager ?
+            this.translationManager.getAvailableProviders() :
+            [];
+
+        // Формируем опции для селекта
+        const providerOptions = providers.map(p => ({
+            value: p.name,
+            label: p.label,
+            icon: p.icon
+        }));
+
+        // Генерируем специфичные поля настроек для каждого провайдера
+        const providerConfigSettings = [];
+
+        providers.forEach(provider => {
+            if (provider.configFields) {
+                provider.configFields.forEach(field => {
+                    providerConfigSettings.push({
+                        // Путь в хранилище: provider.config.yandex.folderId
+                        id: `provider.config.${provider.name}.${field.id}`,
+                        type: field.type,
+                        label: `${field.label}`,
+                        description: field.description,
+                        placeholder: field.placeholder,
+                        defaultValue: field.defaultValue,
+                        // Условия отображения
+                        dependsOn: 'provider.name',
+                        showFor: [provider.name],
+                        required: field.required
+                    });
+                });
+            }
+        });
+
         return [
             {
                 id: 'provider',
@@ -124,19 +211,72 @@ class SettingsManager {
                         type: 'select',
                         label: 'Провайдер',
                         description: 'Выберите сервис перевода',
-                        options: [
-                            { value: 'google', label: 'Google Translate', icon: 'fab fa-google' },
-                            { value: 'deepl', label: 'DeepL', icon: 'fas fa-language' },
-                            { value: 'yandex', label: 'Yandex Translate', icon: 'fab fa-yandex' },
-                            { value: 'microsoft', label: 'Microsoft Translator', icon: 'fab fa-microsoft' }
-                        ]
+                        options: providerOptions
                     },
                     {
                         id: 'provider.apiKey',
                         type: 'apiKey',
                         label: 'Ключ API',
                         description: 'Введите ваш API ключ для доступа к сервису',
-                        placeholder: 'Введите ваш API ключ'
+                        placeholder: 'Введите ваш API ключ',
+                        required: true,
+                        dependsOn: 'provider.name',
+                        hideFor: ['mock'] // Скрываем для mock
+                    },
+                    // Вставляем динамические поля провайдеров
+                    ...providerConfigSettings
+                ]
+            },
+            {
+                id: 'translation',
+                title: 'Настройки перевода',
+                icon: 'fas fa-language',
+                description: 'Параметры перевода текста',
+                settings: [
+                    {
+                        id: 'translation.autoDetectLanguage',
+                        type: 'toggle',
+                        label: 'Автоопределение языка',
+                        description: 'Автоматически определять язык исходного текста'
+                    },
+                    {
+                        id: 'translation.rememberLanguagePairs',
+                        type: 'toggle',
+                        label: 'Запоминать пары языков',
+                        description: 'Запоминать выбранные языки для следующего перевода'
+                    },
+                    {
+                        id: 'translation.defaultSourceLang',
+                        type: 'select',
+                        label: 'Язык по умолчанию (откуда)',
+                        description: 'Язык по умолчанию для исходного текста',
+                        options: [
+                            { value: 'auto', label: 'Автоопределение' },
+                            { value: 'en', label: 'Английский' },
+                            { value: 'ru', label: 'Русский' },
+                            { value: 'es', label: 'Испанский' },
+                            { value: 'fr', label: 'Французский' },
+                            { value: 'de', label: 'Немецкий' },
+                            { value: 'zh', label: 'Китайский' },
+                            { value: 'ja', label: 'Японский' },
+                            { value: 'ko', label: 'Корейский' }
+                        ]
+                    },
+                    {
+                        id: 'translation.defaultTargetLang',
+                        type: 'select',
+                        label: 'Язык по умолчанию (куда)',
+                        description: 'Язык по умолчанию для перевода',
+                        options: [
+                            { value: 'en', label: 'Английский' },
+                            { value: 'ru', label: 'Русский' },
+                            { value: 'es', label: 'Испанский' },
+                            { value: 'fr', label: 'Французский' },
+                            { value: 'de', label: 'Немецкий' },
+                            { value: 'zh', label: 'Китайский' },
+                            { value: 'ja', label: 'Японский' },
+                            { value: 'ko', label: 'Корейский' }
+                        ]
                     }
                 ]
             },
@@ -157,6 +297,18 @@ class SettingsManager {
                         type: 'toggle',
                         label: 'Live перевод при печати',
                         description: 'Автоматически переводить текст во время ввода'
+                    },
+                    {
+                        id: 'app.cacheTranslations',
+                        type: 'toggle',
+                        label: 'Кэшировать переводы',
+                        description: 'Сохранять переводы в кэше для быстрого доступа'
+                    },
+                    {
+                        id: 'app.translationHistory',
+                        type: 'toggle',
+                        label: 'История переводов',
+                        description: 'Сохранять историю выполненных переводов'
                     }
                 ]
             },
@@ -216,30 +368,42 @@ class SettingsManager {
         ];
     }
 
-    async testProviderConnection(provider, apiKey) {
+    async testProviderConnection(provider, apiKey, config = {}) {
         try {
-            await new Promise(resolve => setTimeout(resolve, 1500));
-
-            if (!apiKey || apiKey.length < 5) {
+            if (!this.translationManager) {
                 return {
                     success: false,
-                    error: 'Неверный API ключ',
-                    details: 'Ключ API должен содержать не менее 5 символов'
+                    error: 'Translation manager not available',
+                    details: 'Попробуйте перезапустить приложение'
                 };
             }
 
-            return {
-                success: true,
-                message: 'Соединение успешно установлено',
-                details: `Провайдер: ${provider}, время отклика: 1500мс`
-            };
+            const result = await this.translationManager.testProviderConnection(provider, apiKey, config);
+            return result;
+
         } catch (error) {
+            this.logger.error('Provider connection test failed:', error);
             return {
                 success: false,
-                error: 'Ошибка соединения',
-                details: error.message
+                error: error.message || 'Ошибка соединения',
+                details: 'Не удалось установить соединение с провайдером'
             };
         }
+    }
+
+    async getTranslationHistory() {
+        if (!this.translationManager) {
+            return [];
+        }
+        return this.translationManager.getTranslationHistory();
+    }
+
+    async clearTranslationHistory() {
+        if (!this.translationManager) {
+            return false;
+        }
+        this.translationManager.clearHistory();
+        return true;
     }
 
     getSettings() {

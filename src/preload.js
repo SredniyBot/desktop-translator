@@ -41,14 +41,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
     });
   },
 
+  // Провайдер
+  onProviderChanged: (callback) => {
+    ipcRenderer.on('provider-changed', (event, providerSettings) => {
+      callback(providerSettings);
+    });
+  },
+
   // Настройки - новая архитектура
   getSettingsStructure: () => ipcRenderer.invoke('get-settings-structure'),
   getAllSettings: () => ipcRenderer.invoke('get-all-settings'),
   getSetting: (path) => ipcRenderer.invoke('get-setting', path),
   updateSetting: (path, value) => ipcRenderer.invoke('update-setting', { path, value }),
   resetSettings: () => ipcRenderer.invoke('reset-settings'),
-  testProviderConnection: (provider, apiKey) =>
-      ipcRenderer.invoke('test-provider-connection', { provider, apiKey }),
+  testProviderConnection: (provider, apiKey, config) =>
+      ipcRenderer.invoke('test-provider-connection', { provider, apiKey, config }),
+
+  // Языки
+  getSupportedLanguages: () => ipcRenderer.invoke('get-supported-languages'),
+
+  // История
+  getTranslationHistory: () => ipcRenderer.invoke('get-translation-history'),
+  clearTranslationHistory: () => ipcRenderer.invoke('clear-translation-history'),
+
+  // Информация о провайдере
+  getCurrentProviderInfo: () => ipcRenderer.invoke('get-current-provider-info'),
 
   // Тема (для обратной совместимости)
   onThemeChanged: (callback) => {

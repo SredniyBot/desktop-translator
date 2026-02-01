@@ -1,7 +1,7 @@
 const WindowManager = require('./WindowManager');
 const HotkeyManager = require('./HotkeyManager');
 const TrayManager = require('./TrayManager');
-const TranslationService = require('./TranslationService');
+const TranslationManager = require('./translation/TranslationManager');
 const TextSelectionService = require('./TextSelectionService');
 const SettingsStore = require('./SettingsStore');
 const SettingsManager = require('./SettingsManager');
@@ -25,18 +25,34 @@ class AppManager {
             this.components.settingsStore = new SettingsStore(app);
             await this.components.settingsStore.initialize();
 
-            // Инициализируем менеджер настроек
+            // Инициализируем менеджер перевода
+            this.components.translationManager = new TranslationManager();
+
+            // Инициализируем менеджер настроек с ссылкой на менеджер перевода
             this.components.settingsManager = new SettingsManager(this.components.settingsStore);
+            this.components.settingsManager.setTranslationManager(this.components.translationManager);
             await this.components.settingsManager.initialize();
 
+            // Получаем настройки провайдера
+            const settings = this.components.settingsStore.getAll();
+            const providerSettings = settings.provider;
+            const providerConfig = this.components.settingsStore.getProviderConfig(providerSettings.name);
+
+            // Инициализируем менеджер перевода с текущим провайдером
+            await this.components.translationManager.initialize(
+                providerSettings.name,
+                providerSettings.apiKey,
+                providerConfig
+            );
+
             // Остальные компоненты
-            this.components.translationService = new TranslationService();
             this.components.textSelectionService = new TextSelectionService();
             this.components.windowManager = new WindowManager();
 
             this.components.hotkeyManager = new HotkeyManager({
                 windowManager: this.components.windowManager,
                 textSelectionService: this.components.textSelectionService,
+                translationManager: this.components.translationManager,
                 settingsStore: this.components.settingsStore
             });
 
@@ -65,8 +81,13 @@ class AppManager {
         return this.components.windowManager;
     }
 
+    get translationManager() {
+        return this.components.translationManager;
+    }
+
     get translationService() {
-        return this.components.translationService;
+        // Для обратной совместимости
+        return this.components.translationManager;
     }
 
     get settingsStore() {
@@ -75,6 +96,10 @@ class AppManager {
 
     get settingsManager() {
         return this.components.settingsManager;
+    }
+
+    get textSelectionService() {
+        return this.components.textSelectionService;
     }
 
     cleanup() {

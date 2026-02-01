@@ -8,7 +8,9 @@ class TranslatorRenderer {
       lastDragPos: { x: 0, y: 0 },
       currentTheme: 'light',
       themeColor: 'indigo',
-      settingsOpen: false // Добавляем состояние вкладки настроек
+      settingsOpen: false,
+      currentProvider: 'mock',
+      supportedLanguages: []
     };
 
     this.init();
@@ -23,6 +25,7 @@ class TranslatorRenderer {
   async initializeApplication() {
     this.cacheElements();
     await this.loadSettings();
+    await this.loadSupportedLanguages();
     this.setupEventListeners();
     this.setupElectronIPC();
     this.updateLayout();
@@ -30,6 +33,73 @@ class TranslatorRenderer {
 
     console.log('Translator UI initialized');
   }
+
+  async loadSupportedLanguages() {
+    try {
+      if (window.electronAPI) {
+        const languages = await window.electronAPI.getSupportedLanguages();
+        this.state.supportedLanguages = languages;
+        this.updateLanguageSelects(languages);
+      }
+    } catch (error) {
+      console.warn('Could not load supported languages:', error);
+      this.updateLanguageSelects(this.getDefaultLanguages());
+    }
+  }
+  updateLanguageSelects(languages) {
+    if (!this.elements.sourceLang || !this.elements.targetLang) return;
+
+    // Сохраняем текущие значения
+    const currentSource = this.elements.sourceLang.value;
+    const currentTarget = this.elements.targetLang.value;
+
+    // Очищаем существующие опции (кроме auto)
+    this.elements.sourceLang.innerHTML = '<option value="auto">Определить язык</option>';
+    this.elements.targetLang.innerHTML = '';
+
+    // Добавляем языки в селекты
+    languages.forEach(lang => {
+      // Source language select
+      const sourceOption = document.createElement('option');
+      sourceOption.value = lang.code;
+      sourceOption.textContent = lang.name;
+      this.elements.sourceLang.appendChild(sourceOption);
+
+      // Target language select
+      const targetOption = document.createElement('option');
+      targetOption.value = lang.code;
+      targetOption.textContent = lang.name;
+      this.elements.targetLang.appendChild(targetOption);
+    });
+
+    // Восстанавливаем выбранные значения если они все еще доступны
+    if (currentSource && this.elements.sourceLang.querySelector(`option[value="${currentSource}"]`)) {
+      this.elements.sourceLang.value = currentSource;
+    }
+
+    if (currentTarget && this.elements.targetLang.querySelector(`option[value="${currentTarget}"]`)) {
+      this.elements.targetLang.value = currentTarget;
+    } else {
+      // По умолчанию русский
+      const ruOption = this.elements.targetLang.querySelector('option[value="ru"]');
+      if (ruOption) {
+        ruOption.selected = true;
+      }
+    }
+  }
+  getDefaultLanguages() {
+    return [
+      { code: 'en', name: 'Английский' },
+      { code: 'ru', name: 'Русский' },
+      { code: 'es', name: 'Испанский' },
+      { code: 'fr', name: 'Французский' },
+      { code: 'de', name: 'Немецкий' },
+      { code: 'zh', name: 'Китайский' },
+      { code: 'ja', name: 'Японский' },
+      { code: 'ko', name: 'Корейский' }
+    ];
+  }
+
 
   cacheElements() {
     this.elements = {
@@ -92,6 +162,12 @@ class TranslatorRenderer {
       this.elements.container?.classList.add('no-border');
       // При потере фокуса закрываем настройки
       this.closeSettingsIfOpen();
+    });
+
+    window.electronAPI.onProviderChanged((providerSettings) => {
+      console.log('Provider changed:', providerSettings.name);
+      this.state.currentProvider = providerSettings.name;
+      this.loadSupportedLanguages();
     });
 
     window.electronAPI.onWindowFocus(() => {
@@ -464,6 +540,11 @@ class TranslatorRenderer {
 
       if (this.elements.translated) {
         this.elements.translated.value = result.translatedText || 'Ошибка получения перевода';
+
+        // Показываем информацию о провайдере если есть
+        if (result.provider && result.provider !== 'mock') {
+          this.showToast(this.elements.translated, `Переведено с помощью ${result.provider}`, 3000);
+        }
       }
     } catch (error) {
       console.error('Translation error:', error);
