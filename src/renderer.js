@@ -46,47 +46,43 @@ class TranslatorRenderer {
       this.updateLanguageSelects(this.getDefaultLanguages());
     }
   }
+
   updateLanguageSelects(languages) {
     if (!this.elements.sourceLang || !this.elements.targetLang) return;
 
-    // Сохраняем текущие значения
     const currentSource = this.elements.sourceLang.value;
     const currentTarget = this.elements.targetLang.value;
 
-    // Очищаем существующие опции (кроме auto)
-    this.elements.sourceLang.innerHTML = '<option value="auto">Определить язык</option>';
+    this.elements.sourceLang.innerHTML = '';
     this.elements.targetLang.innerHTML = '';
 
-    // Добавляем языки в селекты
     languages.forEach(lang => {
-      // Source language select
       const sourceOption = document.createElement('option');
       sourceOption.value = lang.code;
       sourceOption.textContent = lang.name;
       this.elements.sourceLang.appendChild(sourceOption);
 
-      // Target language select
       const targetOption = document.createElement('option');
       targetOption.value = lang.code;
       targetOption.textContent = lang.name;
       this.elements.targetLang.appendChild(targetOption);
     });
 
-    // Восстанавливаем выбранные значения если они все еще доступны
     if (currentSource && this.elements.sourceLang.querySelector(`option[value="${currentSource}"]`)) {
       this.elements.sourceLang.value = currentSource;
+    } else {
+      const enOption = this.elements.sourceLang.querySelector('option[value="en"]');
+      if (enOption) enOption.selected = true;
     }
 
     if (currentTarget && this.elements.targetLang.querySelector(`option[value="${currentTarget}"]`)) {
       this.elements.targetLang.value = currentTarget;
     } else {
-      // По умолчанию русский
       const ruOption = this.elements.targetLang.querySelector('option[value="ru"]');
-      if (ruOption) {
-        ruOption.selected = true;
-      }
+      if (ruOption) ruOption.selected = true;
     }
   }
+
   getDefaultLanguages() {
     return [
       { code: 'en', name: 'Английский' },
@@ -99,7 +95,6 @@ class TranslatorRenderer {
       { code: 'ko', name: 'Корейский' }
     ];
   }
-
 
   cacheElements() {
     this.elements = {
@@ -114,7 +109,7 @@ class TranslatorRenderer {
       copyBtn: document.getElementById('copyBtn'),
       replaceBtn: document.getElementById('replaceBtn'),
       dragHandle: document.querySelector('.drag-handle'),
-      settingsPanel: document.getElementById('settingsPanel') // Добавляем панель настроек
+      settingsPanel: document.getElementById('settingsPanel')
     };
   }
 
@@ -160,7 +155,6 @@ class TranslatorRenderer {
 
     window.electronAPI.onWindowBlur(() => {
       this.elements.container?.classList.add('no-border');
-      // При потере фокуса закрываем настройки
       this.closeSettingsIfOpen();
     });
 
@@ -172,18 +166,15 @@ class TranslatorRenderer {
 
     window.electronAPI.onWindowFocus(() => {
       this.elements.container?.classList.remove('no-border');
-      // При получении фокуса гарантируем, что настройки закрыты
       this.ensureSettingsClosed();
     });
 
     window.electronAPI.onWindowHidden(() => {
       this.updatePinState(false);
-      // При скрытии окна закрываем настройки
       this.closeSettingsIfOpen();
     });
 
     window.electronAPI.onWindowShown(() => {
-      // При показе окна гарантируем, что настройки закрыты
       this.ensureSettingsClosed();
     });
 
@@ -191,51 +182,38 @@ class TranslatorRenderer {
       this.updatePinState(isPinned);
     });
 
-    // Слушаем события изменения темы
     window.electronAPI.onThemeChanged((theme) => {
       this.applyTheme(theme);
       this.state.currentTheme = theme;
     });
 
-    // Слушаем события изменения цвета темы
     window.electronAPI.onThemeColorChanged((color) => {
       this.applyThemeColor(color);
       this.state.themeColor = color;
     });
   }
 
-  /**
-   * Закрывает панель настроек, если она открыта
-   */
   closeSettingsIfOpen() {
     if (this.state.settingsOpen && this.elements.settingsPanel) {
       this.elements.settingsPanel.classList.remove('visible');
       this.elements.settingsToggle?.classList.remove('active');
       this.state.settingsOpen = false;
 
-      // Уведомляем SettingsRenderer о закрытии
       if (window.settingsRenderer) {
         window.settingsRenderer.hideSettings();
       }
     }
   }
 
-  /**
-   * Гарантирует, что панель настроек закрыта
-   */
   ensureSettingsClosed() {
     if (this.elements.settingsPanel?.classList.contains('visible')) {
       this.closeSettingsIfOpen();
     }
   }
 
-  /**
-   * Обновляет состояние панели настроек
-   */
   updateSettingsState(isOpen) {
     this.state.settingsOpen = isOpen;
 
-    // Отправляем состояние в SettingsRenderer
     if (window.settingsRenderer) {
       window.settingsRenderer.isSettingsOpen = isOpen;
     }
@@ -247,7 +225,6 @@ class TranslatorRenderer {
     } else {
       document.body.classList.remove('dark-theme');
     }
-
     console.log(`Theme applied: ${theme}`);
   }
 
@@ -266,7 +243,6 @@ class TranslatorRenderer {
 
     document.documentElement.style.setProperty('--primary', colors.primary);
     document.documentElement.style.setProperty('--primary-dark', colors.dark);
-
     console.log(`Theme color applied: ${color}`);
   }
 
@@ -303,11 +279,8 @@ class TranslatorRenderer {
     this.elements.original.value = text.trim();
     this.focusOriginalTextarea(false);
 
-    if (this.elements.sourceLang) {
-      this.elements.sourceLang.value = 'auto';
-    }
-
-    await this.translateText();
+    // Запускаем перевод, ядро приложения само разберется с направлением
+    await this.translateText(false);
   }
 
   focusOriginalTextarea(selectAll = false) {
@@ -330,7 +303,7 @@ class TranslatorRenderer {
     this.elements.original.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
-        this.translateText();
+        this.translateText(false);
       }
     });
 
@@ -341,7 +314,7 @@ class TranslatorRenderer {
       if (this.shouldUseLiveTranslation()) {
         debounceTimer = setTimeout(() => {
           if (this.elements.original.value.trim()) {
-            this.translateText();
+            this.translateText(false);
           }
         }, 500);
       }
@@ -369,7 +342,6 @@ class TranslatorRenderer {
       this.elements.pinToggle.addEventListener('click', () => this.togglePin());
     }
 
-    // Обработчик для кнопки настроек
     if (this.elements.settingsToggle) {
       this.elements.settingsToggle.addEventListener('click', () => {
         this.toggleSettings();
@@ -377,9 +349,6 @@ class TranslatorRenderer {
     }
   }
 
-  /**
-   * Переключает состояние панели настроек
-   */
   toggleSettings() {
     if (this.state.settingsOpen) {
       this.closeSettingsIfOpen();
@@ -388,9 +357,6 @@ class TranslatorRenderer {
     }
   }
 
-  /**
-   * Открывает панель настроек
-   */
   openSettings() {
     if (!this.elements.settingsPanel) return;
 
@@ -398,7 +364,6 @@ class TranslatorRenderer {
     this.elements.settingsToggle?.classList.add('active');
     this.state.settingsOpen = true;
 
-    // Уведомляем SettingsRenderer об открытии
     if (window.settingsRenderer) {
       window.settingsRenderer.isSettingsOpen = true;
     }
@@ -407,15 +372,16 @@ class TranslatorRenderer {
   setupLanguageEvents() {
     if (!this.elements.sourceLang || !this.elements.targetLang) return;
 
+    // При ручном изменении дропдаунов отправляем флаг true
     this.elements.sourceLang.addEventListener('change', () => {
       if (this.elements.original.value.trim()) {
-        this.translateText();
+        this.translateText(true);
       }
     });
 
     this.elements.targetLang.addEventListener('change', () => {
       if (this.elements.original.value.trim()) {
-        this.translateText();
+        this.translateText(true);
       }
     });
   }
@@ -431,7 +397,8 @@ class TranslatorRenderer {
     translateBtn.id = 'translateBtn';
     translateBtn.className = 'action-btn';
     translateBtn.innerHTML = '<i class="fas fa-language"></i> Перевести';
-    translateBtn.addEventListener('click', () => this.translateText());
+    // Нажатие на кнопку перевода работает как оптимистичный вызов
+    translateBtn.addEventListener('click', () => this.translateText(false));
 
     footer.insertBefore(translateBtn, footer.firstChild);
   }
@@ -507,7 +474,7 @@ class TranslatorRenderer {
     textAreas.classList.toggle('vertical-layout', !isHorizontal);
   }
 
-  async translateText() {
+  async translateText(isManualSelect = false) {
     if (this.state.isTranslating) return;
 
     const text = this.elements.original.value.trim();
@@ -518,7 +485,8 @@ class TranslatorRenderer {
       return;
     }
 
-    const from = this.elements.sourceLang.value === 'auto' ? 'auto' : this.elements.sourceLang.value;
+    // Если запрос автоматический (live typing) - отдаем "auto", иначе берем из дропдауна
+    const from = isManualSelect ? this.elements.sourceLang.value : 'auto';
     const to = this.elements.targetLang.value;
 
     this.state.isTranslating = true;
@@ -541,7 +509,14 @@ class TranslatorRenderer {
       if (this.elements.translated) {
         this.elements.translated.value = result.translatedText || 'Ошибка получения перевода';
 
-        // Показываем информацию о провайдере если есть
+        // Обновляем плашки на реальные языки, которые вернул провайдер
+        if (result.sourceLang) {
+          this.elements.sourceLang.value = result.sourceLang;
+        }
+        if (result.targetLang) {
+          this.elements.targetLang.value = result.targetLang;
+        }
+
         if (result.provider && result.provider !== 'mock') {
           this.showToast(this.elements.translated, `Переведено с помощью ${result.provider}`, 3000);
         }
@@ -606,7 +581,7 @@ class TranslatorRenderer {
     this.elements.targetLang.value = tempLang;
 
     if (this.elements.original.value.trim()) {
-      this.translateText();
+      this.translateText(true); // Принудительный перевод с новыми языками
     }
 
     setTimeout(() => {

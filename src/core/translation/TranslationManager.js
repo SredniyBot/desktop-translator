@@ -1,68 +1,36 @@
 // File: src/core/translation/TranslationManager.js
 const TranslationProviderFactory = require('./TranslationProviderFactory');
-const Logger = require('../../utils/Logger');
-const LanguageUtils = require('../../utils/LanguageUtils');
 const TranslationContext = require('./TranslationContext');
 
-/**
- * Менеджер перевода (Core Service)
- * Отвечает за:
- * 1. Управление провайдерами (Yandex, Google, Mock)
- * 2. Кэширование запросов
- * 3. Историю переводов
- * 4. Умное переключение контекста (Smart Switch)
- */
 class TranslationManager {
     constructor() {
-        this.logger = new Logger('TranslationManager');
         this.providerFactory = new TranslationProviderFactory();
         this.activeProvider = null;
         this.apiKey = null;
 
-        // Кэш и история
         this.cache = new Map();
         this.maxCacheSize = 100;
-        this.cacheTTL = 24 * 60 * 60 * 1000; // 24 часа
+        this.cacheTTL = 24 * 60 * 60 * 1000;
+
         this.history = [];
         this.maxHistorySize = 50;
 
-        // Ссылка на SettingsStore (для чтения конфига)
         this.settingsStore = null;
-
-        // Контекст (машина состояний)
         this.context = null;
     }
 
-    /**
-     * Инициализирует менеджер с конкретным провайдером
-     */
     async initialize(providerName, apiKey, config = {}) {
-        try {
-            this.logger.info(`Initializing translation manager with provider: ${providerName}`);
-            this.activeProvider = this.providerFactory.createProvider(providerName, config);
-            this.apiKey = apiKey;
-            await this.activeProvider.initialize(apiKey);
-
-            this.initializeContext();
-
-            this.logger.info(`Translation manager initialized with provider: ${providerName}`);
-        } catch (error) {
-            this.logger.error('Failed to initialize translation manager:', error);
-            throw error;
-        }
+        this.activeProvider = this.providerFactory.createProvider(providerName, config);
+        this.apiKey = apiKey;
+        await this.activeProvider.initialize(apiKey);
+        this.initializeContext();
     }
 
-    /**
-     * Устанавливает ссылку на store для доступа к настройкам
-     */
     setSettingsStore(store) {
         this.settingsStore = store;
         this.initializeContext();
     }
 
-    /**
-     * Инициализирует или обновляет контекст перевода на основе настроек
-     */
     initializeContext() {
         if (!this.settingsStore) return;
 
@@ -72,98 +40,78 @@ class TranslationManager {
         const timeout = settings.sessionTimeout || 60;
 
         if (!this.context) {
-            this.logger.info('Creating new Translation Context');
             this.context = new TranslationContext(primary, secondary, timeout);
         } else {
             this.context.updateConfig(primary, secondary, timeout);
         }
     }
 
-    /**
-     * Выполняет перевод текста
-     * @param {string} text - Текст для перевода
-     * @param {string} sourceLang - Исходный язык ('auto' или код)
-     * @param {string} targetLang - Целевой язык (или null для автовыбора)
-     * @param {Object} options - Опции вызова ({ isExternal: boolean })
-     */
-    async translate(text, sourceLang, targetLang, options = { isExternal: false }) {
+    async translate(text, sourceLang, targetLang) {
         if (!text || !text.trim()) {
             return { translatedText: '', error: 'Empty text' };
         }
 
-        // 1. Проверка наличия провайдера (fallback на mock)
         if (!this.activeProvider) {
-            this.logger.warn('No active provider, using mock as fallback');
             await this.initialize('mock', 'mock-key');
         }
 
-        // 2. Чтение настроек
         const settings = this.settingsStore ? this.settingsStore.getAll().translation : {};
-        const isSmart = settings.smartSwitch !== false; // По умолчанию включено
 
-        let finalSource = sourceLang;
-        let finalTarget = targetLang;
-
-        // 3. Логика Context Aware
-        if (isSmart && this.context && sourceLang === 'auto') {
-            // Детектим язык с подсказкой из контекста
-            const detected = LanguageUtils.detectLanguage(text, [
-                this.context.primary,
-                this.context.lastForeign
-            ]);
-
-            this.logger.debug(`Detected language: ${detected} (isExternal=${options.isExternal})`);
-
-            // Обновляем состояние контекста
-            if (options.isExternal) {
-                this.context.handleExternalInput(detected);
-            } else {
-                this.context.handleInputUpdate(detected);
+        if (this.context) {
+            this.context.checkTimeout();
+            if (sourceLang && sourceLang !== 'auto' && targetLang) {
+                this.context.setManualPair(sourceLang, targetLang);
             }
-
-            // Получаем пару из контекста
-            const pair = this.context.getCurrentPair();
-
-            if (detected) {
-                finalSource = (pair.source === 'auto') ? detected : pair.source;
-            } else {
-                finalSource = 'auto';
-            }
-            finalTarget = pair.target;
         }
 
-        // Fallback: Если target все еще не определен
-        if (!finalTarget) {
-            finalTarget = settings.primaryLanguage;
-        }
+        let finalTarget = targetLang || (this.context ? this.context.currentTarget : (settings.primaryLanguage || 'ru'));
+        let requestSource = (!sourceLang || sourceLang === 'auto') ? 'auto' : sourceLang;
+        let assumedSource = requestSource === 'auto' ? (this.context ? this.context.currentSource : 'en') : requestSource;
 
-        // 4. Проверка кэша
-        const cacheKey = this.getCacheKey(text, finalSource, finalTarget);
-        const cached = this.cache.get(cacheKey);
+        let cacheKey = this.getCacheKey(text, assumedSource, finalTarget);
+        let cached = this.cache.get(cacheKey);
 
         if (cached && this.isCacheValid(cached)) {
-            this.logger.debug('Translation from cache');
             return { ...cached, fromCache: true };
         }
 
-        // 5. Вызов провайдера
         try {
-            const result = await this.activeProvider.translate(text, finalSource, finalTarget);
+            let result = await this.activeProvider.translate(text, requestSource, finalTarget);
+            if (result.error) throw result.error;
 
-            if (result.error) {
-                throw result.error;
+            let detectedLang = result.detectedLanguage || result.sourceLang || assumedSource;
+
+            if (this.context && requestSource === 'auto') {
+                const isInverted = this.context.updateFromApiResult(detectedLang);
+
+                if (isInverted) {
+                    finalTarget = this.context.currentTarget;
+                    cacheKey = this.getCacheKey(text, detectedLang, finalTarget);
+                    cached = this.cache.get(cacheKey);
+
+                    if (cached && this.isCacheValid(cached)) {
+                        return { ...cached, fromCache: true };
+                    }
+
+                    result = await this.activeProvider.translate(text, 'auto', finalTarget);
+                    if (result.error) throw result.error;
+
+                    detectedLang = result.detectedLanguage || result.sourceLang || detectedLang;
+                }
             }
 
             const response = {
                 translatedText: result.text,
-                sourceLang: result.sourceLang,
-                targetLang: result.targetLang,
-                detectedLanguage: result.detectedLanguage || finalSource,
+                sourceLang: detectedLang,
+                targetLang: finalTarget,
+                detectedLanguage: detectedLang,
                 provider: this.activeProvider.name,
                 timestamp: Date.now()
             };
 
+            cacheKey = this.getCacheKey(text, detectedLang, finalTarget);
             this.addToCache(cacheKey, response);
+
             this.addToHistory({
                 text,
                 sourceLang: response.sourceLang,
@@ -176,7 +124,6 @@ class TranslationManager {
             return response;
 
         } catch (error) {
-            this.logger.error('Translation failed:', error);
             return {
                 translatedText: '',
                 error: error.message,
@@ -227,7 +174,6 @@ class TranslationManager {
             this.clearCache();
             return true;
         } catch (error) {
-            this.logger.error(`Failed to switch provider to ${providerName}:`, error);
             return false;
         }
     }
@@ -271,8 +217,7 @@ class TranslationManager {
 
     isCacheValid(cacheEntry) {
         if (!cacheEntry.timestamp) return false;
-        const age = Date.now() - cacheEntry.timestamp;
-        return age < this.cacheTTL;
+        return (Date.now() - cacheEntry.timestamp) < this.cacheTTL;
     }
 
     addToCache(key, result) {

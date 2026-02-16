@@ -20,32 +20,26 @@ class AppManager {
         try {
             this.logger.info('Initializing application components...');
 
-            // Инициализируем хранилище настроек
             const { app } = require('electron');
             this.components.settingsStore = new SettingsStore(app);
             await this.components.settingsStore.initialize();
 
-            // Инициализируем менеджер перевода
             this.components.translationManager = new TranslationManager();
 
-            // Инициализируем менеджер настроек с ссылкой на менеджер перевода
             this.components.settingsManager = new SettingsManager(this.components.settingsStore);
             this.components.settingsManager.setTranslationManager(this.components.translationManager);
             await this.components.settingsManager.initialize();
 
-            // Получаем настройки провайдера
             const settings = this.components.settingsStore.getAll();
             const providerSettings = settings.provider;
             const providerConfig = this.components.settingsStore.getProviderConfig(providerSettings.name);
 
-            // Инициализируем менеджер перевода с текущим провайдером
             await this.components.translationManager.initialize(
                 providerSettings.name,
                 providerSettings.apiKey,
                 providerConfig
             );
 
-            // Остальные компоненты
             this.components.textSelectionService = new TextSelectionService();
             this.components.windowManager = new WindowManager();
 
@@ -61,7 +55,6 @@ class AppManager {
                 settingsStore: this.components.settingsStore
             });
 
-            // Запуск компонентов
             await this.components.windowManager.initialize();
             await this.components.hotkeyManager.initialize();
             await this.components.trayManager.initialize();
@@ -82,11 +75,6 @@ class AppManager {
     }
 
     get translationManager() {
-        return this.components.translationManager;
-    }
-
-    get translationService() {
-        // Для обратной совместимости
         return this.components.translationManager;
     }
 

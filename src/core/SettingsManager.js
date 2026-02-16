@@ -57,7 +57,7 @@ class SettingsManager {
             return;
         }
 
-        // Обновляем настройки Smart Switch (контекст)
+        // Обновляем настройки контекста
         if (path.startsWith('translation.') && this.translationManager) {
             this.translationManager.initializeContext();
         }
@@ -247,40 +247,21 @@ class SettingsManager {
                 id: 'translation',
                 title: 'Настройки перевода',
                 icon: 'fas fa-language',
-                description: 'Параметры перевода и автоматизация',
+                description: 'Параметры языков по умолчанию',
                 settings: [
-                    {
-                        id: 'translation.smartSwitch',
-                        type: 'toggle',
-                        label: 'Умное переключение (Context Aware)',
-                        description: 'Автоматически менять направление и запоминать языки сессии'
-                    },
                     {
                         id: 'translation.primaryLanguage',
                         type: 'select',
                         label: 'Родной язык (Primary)',
                         description: 'Ваш основной язык',
-                        options: languageOptions,
-                        dependsOn: 'translation.smartSwitch',
-                        showFor: [true]
+                        options: languageOptions
                     },
                     {
                         id: 'translation.secondLanguage',
                         type: 'select',
                         label: 'Иностранный по умолчанию',
-                        description: 'Язык для новой сессии',
-                        options: languageOptions,
-                        dependsOn: 'translation.smartSwitch',
-                        showFor: [true]
-                    },
-                    {
-                        id: 'translation.defaultTargetLang',
-                        type: 'select',
-                        label: 'Целевой язык (по умолчанию)',
-                        description: 'Язык для перевода, если автоопределение не используется',
-                        options: languageOptions,
-                        dependsOn: 'translation.smartSwitch',
-                        showFor: [false]
+                        description: 'Язык, который будет выбран при запуске',
+                        options: languageOptions
                     }
                 ]
             },
