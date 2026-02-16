@@ -1,35 +1,49 @@
 /* =========================================
-   GLOBAL VARIABLES & THEME CONFIG
+   GLOBAL VARIABLES & DEEP THEME INTEGRATION
    ========================================= */
 :root {
-  /* Базовые цвета приложения (Светлая тема) */
-  --bg-app: rgba(255, 255, 255, 0.85);
-  --bg-solid: #ffffff;
-  --bg-input: rgba(241, 245, 249, 0.6);
-  --text-primary: #1e293b;
-  --text-secondary: #64748b;
-  --border-light: rgba(226, 232, 240, 0.8);
-
-  /* Дефолтные акцентные цвета (Переопределяются через JS) */
+  /* Базовый цвет акцента */
   --primary: #6366f1;
-  --primary-dark: #4f46e5;
 
-  /* Размеры и эффекты */
+  /* Базовые цвета поверхностей */
+  --surface-light: #ffffff;
+  --surface-dark: #0f172a;
+
+  --text-light: #1e293b;
+  --text-dark: #f1f5f9;
+
+  /* === LIGHT THEME (Default) === */
+  --text-primary: color-mix(in srgb, var(--text-light) 90%, var(--primary));
+  --text-secondary: color-mix(in srgb, #64748b 85%, var(--primary));
+
+  /* Полностью непрозрачные фоны */
+  --bg-solid: color-mix(in srgb, var(--surface-light) 96%, var(--primary));
+  --bg-app: color-mix(in srgb, var(--surface-light) 98%, var(--primary));
+  --bg-input: color-mix(in srgb, var(--surface-light) 92%, var(--primary));
+
+  /* Рамки и тени */
+  --border-light: color-mix(in srgb, #e2e8f0 85%, var(--primary));
+  --shadow-base: 0 10px 30px -10px color-mix(in srgb, var(--primary) 25%, transparent);
+
+  /* Геометрия */
   --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-app: 24px;
-  --shadow-base: 0 10px 30px -10px rgba(0, 0, 0, 0.15);
+  --radius-pill: 24px;
   --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .dark-theme {
-  --bg-app: rgba(15, 23, 42, 0.85);
-  --bg-solid: #0f172a;
-  --bg-input: rgba(30, 41, 59, 0.6);
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --border-light: rgba(51, 65, 85, 0.8);
+  /* === DARK THEME === */
+  --text-primary: color-mix(in srgb, var(--text-dark) 95%, var(--primary));
+  --text-secondary: color-mix(in srgb, #94a3b8 85%, var(--primary));
+
+  /* Полностью непрозрачные фоны */
+  --bg-solid: color-mix(in srgb, var(--surface-dark) 93%, var(--primary));
+  --bg-app: color-mix(in srgb, var(--surface-dark) 96%, var(--primary));
+  --bg-input: color-mix(in srgb, var(--surface-dark) 85%, var(--primary));
+
+  --border-light: color-mix(in srgb, #334155 85%, var(--primary));
+  --shadow-base: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
 }
 
 /* =========================================
@@ -52,7 +66,6 @@ body {
   overflow: hidden;
 }
 
-/* Скроллбар */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 4px; }
@@ -70,8 +83,6 @@ body {
   display: flex;
   flex-direction: column;
   background: var(--bg-app);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border-light);
   overflow: hidden;
   padding: 12px;
@@ -86,6 +97,8 @@ body {
   align-items: center;
   padding-bottom: 12px;
   -webkit-app-region: drag;
+  position: relative;
+  z-index: 20;
 }
 
 .drag-handle { flex: 1; height: 100%; }
@@ -111,16 +124,15 @@ body {
 }
 
 .pin-toggle:hover, .settings-toggle:hover {
-  background: var(--border-light);
-  color: var(--text-primary);
-}
-
-.pin-toggle.active, .settings-toggle.active {
-  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  background: color-mix(in srgb, var(--primary) 10%, var(--bg-solid));
   color: var(--primary);
 }
 
-/* Иконки пина */
+.pin-toggle.active, .settings-toggle.active {
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  color: var(--primary);
+}
+
 .pin-toggle .icon-active { display: none; }
 .pin-toggle.active .icon-default { display: none; }
 .pin-toggle.active .icon-active { display: block; }
@@ -134,6 +146,8 @@ body {
   flex-direction: column;
   overflow: hidden;
   gap: 12px;
+  position: relative;
+  z-index: 1;
 }
 
 .controls {
@@ -144,7 +158,6 @@ body {
   -webkit-app-region: no-drag;
 }
 
-/* Языковые селекты */
 .select-container {
   position: relative;
   flex: 1;
@@ -153,7 +166,7 @@ body {
 
 .select-container i {
   position: absolute;
-  left: 12px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--primary);
@@ -162,8 +175,8 @@ body {
 
 select {
   width: 100%;
-  padding: 10px 12px 10px 36px;
-  border-radius: var(--radius-md);
+  padding: 8px 16px 8px 36px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border-light);
   background: var(--bg-solid);
   color: var(--text-primary);
@@ -172,9 +185,9 @@ select {
   appearance: none;
   cursor: pointer;
   transition: var(--transition);
+  box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
-/* Кнопка смены языков */
 .swap-btn {
   background: var(--bg-solid);
   border: 1px solid var(--border-light);
@@ -188,6 +201,7 @@ select {
   cursor: pointer;
   transition: var(--transition);
   flex-shrink: 0;
+  box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
 .swap-btn:hover {
@@ -231,7 +245,7 @@ select {
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 6px;
-  padding-left: 4px;
+  padding-left: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -254,12 +268,11 @@ textarea:focus, select:focus {
   outline: none;
   border-color: var(--primary);
   background: var(--bg-solid);
-  /* Магия color-mix для подсветки активным цветом темы */
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
 }
 
 #translated {
-  background: color-mix(in srgb, var(--primary) 5%, var(--bg-solid));
+  background: color-mix(in srgb, var(--primary) 5%, var(--bg-input));
   border-color: transparent;
 }
 
@@ -267,11 +280,16 @@ textarea:focus, select:focus {
    FOOTER & BUTTONS
    ========================================= */
 .footer {
+  position: relative;
+  z-index: 100;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
   padding-top: 8px;
+  flex-wrap: wrap;
   -webkit-app-region: no-drag;
+  pointer-events: auto;
 }
 
 .action-btn {
@@ -279,7 +297,7 @@ textarea:focus, select:focus {
   border: 1px solid var(--border-light);
   color: var(--text-primary);
   padding: 8px 16px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   font-weight: 500;
   font-size: 0.9rem;
   cursor: pointer;
@@ -288,16 +306,24 @@ textarea:focus, select:focus {
   align-items: center;
   gap: 6px;
   position: relative;
+  box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--primary) 15%, transparent);
+  user-select: none;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+}
+
+.action-btn * {
+  pointer-events: none;
+}
+
+.action-btn:hover {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, var(--bg-solid));
+  color: var(--primary);
 }
 
 .action-btn i { color: var(--primary); }
 
-.action-btn:hover {
-  border-color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 5%, transparent);
-}
-
-/* Тосты (Уведомления) */
 .toast {
   position: absolute;
   bottom: 110%;
@@ -321,12 +347,12 @@ textarea:focus, select:focus {
 }
 
 /* =========================================
-   SETTINGS OVERLAY (REDESIGNED)
+   SETTINGS OVERLAY
    ========================================= */
 .settings-panel {
   position: absolute;
   inset: 0;
-  background: var(--bg-solid); /* Непрозрачный фон для чистоты */
+  background: var(--bg-app);
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -348,7 +374,7 @@ textarea:focus, select:focus {
   align-items: center;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border-light);
-  background: var(--bg-app);
+  background: var(--bg-solid);
   -webkit-app-region: drag;
 }
 
@@ -380,17 +406,14 @@ textarea:focus, select:focus {
   color: #ef4444;
 }
 
-/* Контент настроек */
 .settings-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-bottom: 40px;
 }
 
-/* Секции - Плоский дизайн (Apple Style) */
-.settings-section {
-  margin-bottom: 24px;
-}
+.settings-section { margin-bottom: 24px; }
 
 .section-header {
   padding: 20px 20px 8px;
@@ -399,8 +422,7 @@ textarea:focus, select:focus {
   gap: 10px;
 }
 
-.section-header i { display: none; } /* Убираем лишние иконки из заголовков */
-
+.section-header i { display: none; }
 .section-title h3 {
   font-size: 0.85rem;
   text-transform: uppercase;
@@ -408,12 +430,12 @@ textarea:focus, select:focus {
   color: var(--text-secondary);
   font-weight: 600;
 }
-.section-description { display: none; } /* Скрываем избыточные описания секций */
+.section-description { display: none; }
 
 .settings-list {
   border-top: 1px solid var(--border-light);
   border-bottom: 1px solid var(--border-light);
-  background: var(--bg-app);
+  background: var(--bg-solid);
 }
 
 .setting-item {
@@ -426,9 +448,7 @@ textarea:focus, select:focus {
 }
 .setting-item:last-child { border-bottom: none; }
 
-.setting-label-container, .toggle-text-container {
-  flex: 1;
-}
+.setting-label-container, .toggle-text-container { flex: 1; min-width: 0; }
 
 .setting-item label {
   font-size: 0.95rem;
@@ -443,7 +463,6 @@ textarea:focus, select:focus {
   margin-top: 2px;
 }
 
-/* Элементы управления в настройках */
 .setting-input, .setting-select {
   padding: 8px 12px;
   border-radius: var(--radius-sm);
@@ -452,6 +471,7 @@ textarea:focus, select:focus {
   color: var(--text-primary);
   font-size: 0.9rem;
   min-width: 200px;
+  max-width: 100%;
   transition: var(--transition);
 }
 
@@ -462,7 +482,101 @@ textarea:focus, select:focus {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
 }
 
-/* Toggle (Переключатели) */
+/* =========================================
+   LIST CONTROLS (HOTKEYS/ARRAYS)
+   ========================================= */
+.list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.settings-list-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.list-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  justify-content: flex-start;
+}
+
+/* Возвращаем растягивание, сохраняя пропорции 2 к 1 */
+.list-item-name {
+  flex: 2 1 0;
+}
+.list-item-key {
+  flex: 1 1 0;
+}
+
+.list-item-name, .list-item-key {
+  min-width: 0; /* Исключает появление горизонтального скролла */
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  transition: var(--transition);
+}
+
+.list-item-name:focus, .list-item-key:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: var(--bg-solid);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent);
+}
+
+.delete-list-item {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.delete-list-item:hover {
+  background: #ef4444;
+  color: white;
+}
+
+.add-list-item {
+  align-self: flex-start;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: var(--transition);
+}
+
+.add-list-item:hover {
+  background: var(--primary);
+  color: white;
+}
+
+/* =========================================
+   OTHER CONTROLS
+   ========================================= */
 .toggle-switch {
   position: relative;
   display: inline-block;
@@ -492,15 +606,10 @@ textarea:focus, select:focus {
   transition: var(--transition);
   box-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
-
 input:checked + .toggle-slider { background-color: var(--primary); }
 input:checked + .toggle-slider:before { transform: translateX(20px); }
 
-/* Цветовая палитра */
-.color-picker {
-  display: flex;
-  gap: 10px;
-}
+.color-picker { display: flex; gap: 10px; }
 .color-option {
   width: 28px;
   height: 28px;
@@ -516,11 +625,7 @@ input:checked + .toggle-slider:before { transform: translateX(20px); }
 }
 .color-option i { display: none; }
 
-/* Сброс настроек */
-.reset-settings-container {
-  padding: 20px;
-  margin-top: 20px;
-}
+.reset-settings-container { padding: 20px; margin-top: 20px; }
 .reset-settings-button {
   width: 100%;
   padding: 10px;
@@ -537,12 +642,7 @@ input:checked + .toggle-slider:before { transform: translateX(20px); }
   color: white;
 }
 
-/* API-кнопка */
-.api-key-container {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
+.api-key-container { display: flex; gap: 8px; align-items: center; }
 .api-key-input-wrapper { position: relative; flex: 1; }
 .password-toggle {
   position: absolute;
@@ -564,7 +664,6 @@ input:checked + .toggle-slider:before { transform: translateX(20px); }
   font-weight: 500;
 }
 
-/* Notification Global */
 .notification {
   position: fixed;
   top: 20px;
@@ -583,7 +682,6 @@ input:checked + .toggle-slider:before { transform: translateX(20px); }
 .notification-success { border-left-color: #10b981; }
 .notification-error { border-left-color: #ef4444; }
 
-/* Loading */
 .loading-overlay {
   position: absolute; inset: 0;
   background: rgba(0,0,0,0.1);
@@ -603,7 +701,6 @@ input:checked + .toggle-slider:before { transform: translateX(20px); }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Save Indicator */
 .save-indicator {
   position: fixed;
   bottom: 20px;
@@ -620,4 +717,17 @@ input:checked + .toggle-slider:before { transform: translateX(20px); }
 .save-indicator.show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* =========================================
+   Адаптация для мобильных окон
+   ========================================= */
+@media (max-width: 480px) {
+  .action-btn .btn-text { display: none; }
+  .action-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+  }
 }

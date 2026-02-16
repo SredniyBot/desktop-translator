@@ -111,11 +111,9 @@ class TranslatorRenderer {
       pinToggle: document.getElementById('pinToggle'),
       swapBtn: document.getElementById('swapLangs'),
       container: document.querySelector('.container'),
-      settingsToggle: document.getElementById('settingsToggle'),
       copyBtn: document.getElementById('copyBtn'),
       replaceBtn: document.getElementById('replaceBtn'),
-      dragHandle: document.querySelector('.drag-handle'),
-      settingsPanel: document.getElementById('settingsPanel')
+      dragHandle: document.querySelector('.drag-handle')
     };
   }
 
@@ -146,10 +144,7 @@ class TranslatorRenderer {
   }
 
   setupElectronIPC() {
-    if (!window.electronAPI) {
-      console.error('Electron API not available');
-      return;
-    }
+    if (!window.electronAPI) return;
 
     window.electronAPI.onTranslateText(async (text) => {
       await this.handleIncomingText(text);
@@ -165,14 +160,13 @@ class TranslatorRenderer {
     });
 
     window.electronAPI.onProviderChanged((providerSettings) => {
-      console.log('Provider changed:', providerSettings.name);
       this.state.currentProvider = providerSettings.name;
       this.loadSupportedLanguages();
     });
 
     window.electronAPI.onWindowFocus(() => {
       this.elements.container?.classList.remove('no-border');
-      this.ensureSettingsClosed();
+      this.closeSettingsIfOpen();
     });
 
     window.electronAPI.onWindowHidden(() => {
@@ -181,7 +175,7 @@ class TranslatorRenderer {
     });
 
     window.electronAPI.onWindowShown(() => {
-      this.ensureSettingsClosed();
+      this.closeSettingsIfOpen();
     });
 
     window.electronAPI.onPinStateChanged((isPinned) => {
@@ -200,29 +194,13 @@ class TranslatorRenderer {
   }
 
   closeSettingsIfOpen() {
-    if (this.state.settingsOpen && this.elements.settingsPanel) {
-      this.elements.settingsPanel.classList.remove('visible');
-      this.elements.settingsToggle?.classList.remove('active');
-      this.state.settingsOpen = false;
-
-      if (window.settingsRenderer) {
-        window.settingsRenderer.hideSettings();
-      }
-    }
-  }
-
-  ensureSettingsClosed() {
-    if (this.elements.settingsPanel?.classList.contains('visible')) {
-      this.closeSettingsIfOpen();
+    if (window.settingsRenderer && window.settingsRenderer.isSettingsOpen) {
+      window.settingsRenderer.hideSettings();
     }
   }
 
   updateSettingsState(isOpen) {
     this.state.settingsOpen = isOpen;
-
-    if (window.settingsRenderer) {
-      window.settingsRenderer.isSettingsOpen = isOpen;
-    }
   }
 
   applyTheme(theme) {
@@ -231,7 +209,6 @@ class TranslatorRenderer {
     } else {
       document.body.classList.remove('dark-theme');
     }
-    console.log(`Theme applied: ${theme}`);
   }
 
   applyThemeColor(color) {
@@ -249,7 +226,6 @@ class TranslatorRenderer {
 
     document.documentElement.style.setProperty('--primary', colors.primary);
     document.documentElement.style.setProperty('--primary-dark', colors.dark);
-    console.log(`Theme color applied: ${color}`);
   }
 
   updatePinState(isPinned) {
@@ -284,7 +260,6 @@ class TranslatorRenderer {
 
     this.elements.original.value = text.trim();
     this.focusOriginalTextarea(false);
-
     await this.translateText(false);
   }
 
@@ -315,7 +290,6 @@ class TranslatorRenderer {
     let debounceTimer;
     this.elements.original.addEventListener('input', () => {
       clearTimeout(debounceTimer);
-
       if (this.shouldUseLiveTranslation()) {
         debounceTimer = setTimeout(() => {
           if (this.elements.original.value.trim()) {
@@ -346,32 +320,6 @@ class TranslatorRenderer {
     if (this.elements.pinToggle) {
       this.elements.pinToggle.addEventListener('click', () => this.togglePin());
     }
-
-    if (this.elements.settingsToggle) {
-      this.elements.settingsToggle.addEventListener('click', () => {
-        this.toggleSettings();
-      });
-    }
-  }
-
-  toggleSettings() {
-    if (this.state.settingsOpen) {
-      this.closeSettingsIfOpen();
-    } else {
-      this.openSettings();
-    }
-  }
-
-  openSettings() {
-    if (!this.elements.settingsPanel) return;
-
-    this.elements.settingsPanel.classList.add('visible');
-    this.elements.settingsToggle?.classList.add('active');
-    this.state.settingsOpen = true;
-
-    if (window.settingsRenderer) {
-      window.settingsRenderer.isSettingsOpen = true;
-    }
   }
 
   setupLanguageEvents() {
@@ -400,7 +348,7 @@ class TranslatorRenderer {
     const translateBtn = document.createElement('button');
     translateBtn.id = 'translateBtn';
     translateBtn.className = 'action-btn';
-    translateBtn.innerHTML = '<i class="fas fa-language"></i> Перевести';
+    translateBtn.innerHTML = '<i class="fas fa-language"></i> <span class="btn-text">Перевести</span>';
     translateBtn.addEventListener('click', () => this.translateText(false));
 
     footer.insertBefore(translateBtn, footer.firstChild);
@@ -537,9 +485,7 @@ class TranslatorRenderer {
 
     const text = this.elements.translated.value;
 
-    if (!text ||
-        text === 'Перевод...' ||
-        text.startsWith('Ошибка:')) {
+    if (!text || text === 'Перевод...' || text.startsWith('Ошибка:')) {
       return;
     }
 
@@ -558,9 +504,7 @@ class TranslatorRenderer {
     const originalText = this.elements.original.value;
     const translatedText = this.elements.translated.value;
 
-    if (!translatedText ||
-        translatedText === 'Перевод...' ||
-        translatedText.startsWith('Ошибка:')) {
+    if (!translatedText || translatedText === 'Перевод...' || translatedText.startsWith('Ошибка:')) {
       return;
     }
 
@@ -593,13 +537,11 @@ class TranslatorRenderer {
 
   togglePin() {
     if (this.state.isPinned) {
-      console.log('Unpinning and hiding window');
       if (window.electronAPI) {
         this.updatePinState(false);
         window.electronAPI.hideWindow();
       }
     } else {
-      console.log('Pinning window');
       if (window.electronAPI) {
         window.electronAPI.togglePin();
       }
@@ -626,5 +568,4 @@ class TranslatorRenderer {
   }
 }
 
-// Запускаем приложение
 new TranslatorRenderer();
