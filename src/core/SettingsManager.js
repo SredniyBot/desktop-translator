@@ -35,10 +35,8 @@ class SettingsManager {
         await this.applyTheme(settings.customization?.theme);
         await this.applyThemeColor(settings.customization?.themeColor);
 
-        // Применяем настройки провайдера перевода
         if (this.translationManager) {
             await this.applyTranslationProvider(settings.provider);
-            // Инициализируем контекст (если настройки изменились пока приложение было выключено)
             if (this.translationManager.initializeContext) {
                 this.translationManager.initializeContext();
             }
@@ -50,14 +48,12 @@ class SettingsManager {
     async applySettingChange({ path, value }) {
         this.logger.debug(`Applying setting change: ${path} =`, value);
 
-        // Обновляем провайдер
         if (path.startsWith('provider.config.')) {
             await this.applyTranslationProvider(this.store.getAll().provider);
             this.appliedSettings.add(path);
             return;
         }
 
-        // Обновляем настройки контекста
         if (path.startsWith('translation.') && this.translationManager) {
             this.translationManager.initializeContext();
         }
@@ -149,7 +145,6 @@ class SettingsManager {
             await this.translationManager.switchProvider(name, apiKey, config);
             this.logger.info(`Translation provider switched to: ${name}`);
 
-            // Отправляем уведомление о смене провайдера
             const mainWindow = require('electron').BrowserWindow.getAllWindows()[0];
             if (mainWindow) {
                 mainWindow.webContents.send('provider-changed', { name, config });
@@ -157,7 +152,6 @@ class SettingsManager {
 
         } catch (error) {
             this.logger.error('Failed to apply translation provider:', error);
-            // Fallback на mock провайдера
             if (providerSettings.name !== 'mock') {
                 this.logger.warn('Falling back to mock provider');
                 await this.translationManager.switchProvider('mock', '', {});
@@ -167,13 +161,12 @@ class SettingsManager {
 
     setTranslationManager(translationManager) {
         this.translationManager = translationManager;
-        // Передаем ссылку на store в менеджер перевода, чтобы он мог читать настройки
         if (this.translationManager.setSettingsStore) {
             this.translationManager.setSettingsStore(this.store);
         }
     }
 
-    getSettingsStructure() {
+    async getSettingsStructure() {
         const providers = this.translationManager ?
             this.translationManager.getAvailableProviders() :
             [];
@@ -203,18 +196,21 @@ class SettingsManager {
             }
         });
 
-        const languageOptions = [
-            { value: 'en', label: 'Английский' },
-            { value: 'ru', label: 'Русский' },
-            { value: 'es', label: 'Испанский' },
-            { value: 'fr', label: 'Французский' },
-            { value: 'de', label: 'Немецкий' },
-            { value: 'zh', label: 'Китайский' },
-            { value: 'ja', label: 'Японский' },
-            { value: 'ko', label: 'Корейский' },
-            { value: 'it', label: 'Итальянский' },
-            { value: 'tr', label: 'Турецкий' }
-        ];
+        let languageOptions = [];
+        if (this.translationManager) {
+            const supportedLanguages = await this.translationManager.getSupportedLanguages();
+            languageOptions = supportedLanguages.map(lang => ({
+                value: lang.code,
+                label: lang.name
+            }));
+        }
+
+        if (languageOptions.length === 0) {
+            languageOptions = [
+                { value: 'en', label: 'Английский' },
+                { value: 'ru', label: 'Русский' }
+            ];
+        }
 
         return [
             {

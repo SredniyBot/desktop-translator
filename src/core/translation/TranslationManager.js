@@ -133,13 +133,47 @@ class TranslationManager {
         }
     }
 
-    async getSupportedLanguages() {
-        if (!this.activeProvider) return this.getDefaultLanguages();
+    getLocalizedLanguageName(code) {
         try {
-            return await this.activeProvider.getSupportedLanguages();
+            // Используем нативный Intl API для локализации названия языка под текущую ОС
+            const locale = Intl.DateTimeFormat().resolvedOptions().locale;
+            const displayNames = new Intl.DisplayNames([locale], { type: 'language' });
+            const name = displayNames.of(code);
+            return name.charAt(0).toUpperCase() + name.slice(1);
         } catch (error) {
-            return this.getDefaultLanguages();
+            return code;
         }
+    }
+
+    async getSupportedLanguages() {
+        let rawLanguages = [];
+        if (!this.activeProvider) {
+            rawLanguages = this.getDefaultLanguages();
+        } else {
+            try {
+                rawLanguages = await this.activeProvider.getSupportedLanguages();
+            } catch (error) {
+                rawLanguages = this.getDefaultLanguages();
+            }
+        }
+
+        const localizedLanguages = rawLanguages.map(lang => ({
+            code: lang.code,
+            name: this.getLocalizedLanguageName(lang.code)
+        }));
+
+        // Убираем дубликаты на случай, если провайдер вернул несколько региональных вариаций
+        const uniqueLangsMap = new Map();
+        for (const lang of localizedLanguages) {
+            if (!uniqueLangsMap.has(lang.code)) {
+                uniqueLangsMap.set(lang.code, lang);
+            }
+        }
+
+        const uniqueLangs = Array.from(uniqueLangsMap.values());
+        uniqueLangs.sort((a, b) => a.name.localeCompare(b.name));
+
+        return uniqueLangs;
     }
 
     async testConnection() {
@@ -240,12 +274,9 @@ class TranslationManager {
 
     getDefaultLanguages() {
         return [
-            { code: 'en', name: 'Английский' },
-            { code: 'ru', name: 'Русский' },
-            { code: 'es', name: 'Испанский' },
-            { code: 'fr', name: 'Французский' },
-            { code: 'de', name: 'Немецкий' },
-            { code: 'zh', name: 'Китайский' }
+            { code: 'en' }, { code: 'ru' }, { code: 'es' },
+            { code: 'fr' }, { code: 'de' }, { code: 'zh' },
+            { code: 'ja' }, { code: 'ko' }, { code: 'it' }, { code: 'tr' }
         ];
     }
 }

@@ -84,16 +84,22 @@ class TranslatorRenderer {
   }
 
   getDefaultLanguages() {
-    return [
-      { code: 'en', name: 'Английский' },
-      { code: 'ru', name: 'Русский' },
-      { code: 'es', name: 'Испанский' },
-      { code: 'fr', name: 'Французский' },
-      { code: 'de', name: 'Немецкий' },
-      { code: 'zh', name: 'Китайский' },
-      { code: 'ja', name: 'Японский' },
-      { code: 'ko', name: 'Корейский' }
-    ];
+    const codes = ['en', 'ru', 'es', 'fr', 'de', 'zh', 'ja', 'ko', 'it', 'tr'];
+    try {
+      const displayNames = new Intl.DisplayNames([navigator.language], { type: 'language' });
+      return codes.map(code => {
+        const name = displayNames.of(code);
+        return {
+          code,
+          name: name.charAt(0).toUpperCase() + name.slice(1)
+        };
+      }).sort((a, b) => a.name.localeCompare(b.name));
+    } catch (e) {
+      return [
+        { code: 'en', name: 'English' },
+        { code: 'ru', name: 'Русский' }
+      ];
+    }
   }
 
   cacheElements() {
@@ -279,7 +285,6 @@ class TranslatorRenderer {
     this.elements.original.value = text.trim();
     this.focusOriginalTextarea(false);
 
-    // Запускаем перевод, ядро приложения само разберется с направлением
     await this.translateText(false);
   }
 
@@ -372,7 +377,6 @@ class TranslatorRenderer {
   setupLanguageEvents() {
     if (!this.elements.sourceLang || !this.elements.targetLang) return;
 
-    // При ручном изменении дропдаунов отправляем флаг true
     this.elements.sourceLang.addEventListener('change', () => {
       if (this.elements.original.value.trim()) {
         this.translateText(true);
@@ -397,7 +401,6 @@ class TranslatorRenderer {
     translateBtn.id = 'translateBtn';
     translateBtn.className = 'action-btn';
     translateBtn.innerHTML = '<i class="fas fa-language"></i> Перевести';
-    // Нажатие на кнопку перевода работает как оптимистичный вызов
     translateBtn.addEventListener('click', () => this.translateText(false));
 
     footer.insertBefore(translateBtn, footer.firstChild);
@@ -485,7 +488,6 @@ class TranslatorRenderer {
       return;
     }
 
-    // Если запрос автоматический (live typing) - отдаем "auto", иначе берем из дропдауна
     const from = isManualSelect ? this.elements.sourceLang.value : 'auto';
     const to = this.elements.targetLang.value;
 
@@ -509,7 +511,6 @@ class TranslatorRenderer {
       if (this.elements.translated) {
         this.elements.translated.value = result.translatedText || 'Ошибка получения перевода';
 
-        // Обновляем плашки на реальные языки, которые вернул провайдер
         if (result.sourceLang) {
           this.elements.sourceLang.value = result.sourceLang;
         }
@@ -581,7 +582,7 @@ class TranslatorRenderer {
     this.elements.targetLang.value = tempLang;
 
     if (this.elements.original.value.trim()) {
-      this.translateText(true); // Принудительный перевод с новыми языками
+      this.translateText(true);
     }
 
     setTimeout(() => {
